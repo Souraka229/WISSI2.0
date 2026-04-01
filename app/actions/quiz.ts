@@ -1,5 +1,6 @@
 'use server'
 
+import { randomInt } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { revalidateTag } from 'next/cache'
 
@@ -112,18 +113,22 @@ export async function createQuestion(
 ) {
   const supabase = await createClient()
 
-  const { data, error } = await supabase.from('questions').insert({
-    quiz_id: quizId,
-    question_text: questionText,
-    question_type: questionType,
-    options: options,
-    correct_answer: correctAnswer,
-    explanation,
-    time_limit: timeLimit,
-    points,
-    difficulty,
-    order_index: orderIndex,
-  })
+  const { data, error } = await supabase
+    .from('questions')
+    .insert({
+      quiz_id: quizId,
+      question_text: questionText,
+      question_type: questionType,
+      options: options,
+      correct_answer: correctAnswer,
+      explanation,
+      time_limit: timeLimit,
+      points,
+      difficulty,
+      order_index: orderIndex,
+    })
+    .select()
+    .single()
 
   if (error) throw error
 
@@ -139,23 +144,49 @@ export async function startSession(quizId: string) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Not authenticated')
+    throw new Error('Non authentifié')
   }
 
-  // Generate unique PIN code
-  const pinCode = Math.random().toString().slice(2, 8)
+  const { data: ownedQuiz, error: quizErr } = await supabase
+    .from('quizzes')
+    .select('id')
+    .eq('id', quizId)
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  const { data, error } = await supabase.from('sessions').insert({
-    quiz_id: quizId,
-    host_id: user.id,
-    pin_code: pinCode,
-    status: 'waiting',
-  })
+  if (quizErr) throw quizErr
+  if (!ownedQuiz) {
+    throw new Error('Quiz introuvable ou vous n’êtes pas autorisé à le lancer')
+  }
 
-  if (error) throw error
+  const maxAttempts = 10
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const pinCode = String(randomInt(100000, 1000000))
 
-  revalidateTag(`quiz-${quizId}`)
-  return data
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert({
+        quiz_id: quizId,
+        host_id: user.id,
+        pin_code: pinCode,
+        status: 'waiting',
+      })
+      .select()
+      .single()
+
+    if (!error && data) {
+      revalidateTag(`quiz-${quizId}`)
+      return data
+    }
+
+    if (error?.code === '23505') {
+      continue
+    }
+
+    throw error ?? new Error('Impossible de créer la session')
+  }
+
+  throw new Error('Impossible d’attribuer un code PIN unique, réessayez')
 }
 
 export async function updateSessionStatus(
