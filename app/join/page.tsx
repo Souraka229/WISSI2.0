@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,11 +16,65 @@ function JoinForm() {
   const [nickname, setNickname] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fromScan, setFromScan] = useState(false)
+  const autoCheckRef = useRef<string | null>(null)
+
+  function normalizePinFromSearch(raw: string | null) {
+    return (raw?.trim() ?? '').replace(/\D/g, '').slice(0, 6)
+  }
 
   useEffect(() => {
-    const pin = searchParams.get('pin')
-    if (pin) {
-      setPinCode(pin)
+    const pin = normalizePinFromSearch(searchParams.get('pin'))
+    if (pin) setPinCode(pin)
+  }, [searchParams])
+
+  /** Après scan du QR : le PIN est dans l’URL → on vérifie tout de suite, il ne reste que le pseudo. */
+  useEffect(() => {
+    const pin = normalizePinFromSearch(searchParams.get('pin'))
+    if (!pin || pin.length < 4) return
+    if (autoCheckRef.current === pin) return
+    autoCheckRef.current = pin
+
+    let cancelled = false
+    ;(async () => {
+      setIsLoading(true)
+      setError('')
+      setFromScan(true)
+      try {
+        const supabase = createClient()
+        const { data, error: queryError } = await supabase
+          .from('sessions')
+          .select('id,status')
+          .eq('pin_code', pin)
+          .single()
+
+        if (cancelled) return
+        if (queryError || !data) {
+          setError('Code invalide ou lien incorrect.')
+          setStep('pin')
+          autoCheckRef.current = null
+          return
+        }
+        if (data.status === 'finished') {
+          setError('Cette session est déjà terminée.')
+          setStep('pin')
+          autoCheckRef.current = null
+          return
+        }
+        setStep('nickname')
+      } catch {
+        if (!cancelled) {
+          setError('Impossible de vérifier le code. Réessayez.')
+          setStep('pin')
+          autoCheckRef.current = null
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [searchParams])
 
@@ -105,16 +159,22 @@ function JoinForm() {
       {step === 'pin' ? (
         <form onSubmit={handlePinSubmit}>
           <h1 className="text-3xl font-bold mb-2">Rejoindre un quiz</h1>
-          <p className="text-muted-foreground mb-8">Entrez le code PIN de votre enseignant</p>
+          <p className="text-muted-foreground mb-8">
+            Code PIN affiché ou scanné depuis le QR code du professeur
+          </p>
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">Code PIN</label>
             <Input
               type="text"
               value={pinCode}
-              onChange={(e) => setPinCode(e.target.value.toUpperCase())}
-              placeholder="Ex: ABC123"
+              onChange={(e) =>
+                setPinCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+              }
+              placeholder="123456"
               maxLength={6}
+              inputMode="numeric"
+              pattern="[0-9]*"
               disabled={isLoading}
               className="text-center text-2xl font-bold tracking-widest bg-input border-border h-14"
               autoFocus
@@ -137,10 +197,20 @@ function JoinForm() {
         </form>
       ) : (
         <form onSubmit={handleNicknameSubmit}>
+          {fromScan && (
+            <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center text-sm text-foreground">
+              QR scanné · session trouvée
+            </div>
+          )}
           <h1 className="text-3xl font-bold mb-2">Votre pseudo</h1>
-          <p className="text-muted-foreground mb-8">
-            C&apos;est ainsi que vous apparaîtrez dans le classement
+          <p className="text-muted-foreground mb-6">
+            C&apos;est ainsi que vous apparaîtrez dans le classement. Le code est déjà
+            renseigné.
           </p>
+          <div className="mb-6 rounded-lg border border-border bg-muted/50 px-3 py-2 text-center">
+            <span className="text-xs text-muted-foreground">Code PIN</span>
+            <p className="font-mono text-xl font-bold tracking-widest">{pinCode}</p>
+          </div>
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">Pseudo</label>
@@ -169,10 +239,12 @@ function JoinForm() {
               onClick={() => {
                 setStep('pin')
                 setError('')
+                setFromScan(false)
+                autoCheckRef.current = null
               }}
               disabled={isLoading}
             >
-              Retour
+              Changer de code
             </Button>
             <Button
               type="submit"

@@ -9,6 +9,7 @@ import {
   type GameMode,
 } from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
+import { JoinQrCode } from '@/components/join-qr-code'
 import { Copy, Play, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -252,37 +253,44 @@ export default function LaunchPage() {
               </div>
 
               <h2 className="text-3xl font-bold text-foreground mb-2">Session en direct</h2>
-              <p className="text-muted-foreground mb-12">
-                Partagez ce code PIN avec les participants
+              <p className="text-muted-foreground mb-10">
+                Code PIN ou QR : les élèves n’ont plus qu’à entrer leur pseudo.
               </p>
 
-              <div className="bg-card border-2 border-primary/40 rounded-xl p-8 mb-8">
-                <p className="text-sm text-muted-foreground mb-3 font-semibold uppercase tracking-wider">
-                  Code PIN
-                </p>
-                <p className="text-6xl font-black text-primary tracking-wider mb-4">
-                  {session.pin_code}
-                </p>
-                <button
-                  onClick={copyToClipboard}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-primary/15 hover:bg-primary/25 text-primary rounded-lg transition-colors font-semibold text-sm"
-                >
-                  <Copy className="w-4 h-4" />
-                  {copied ? 'Copié !' : 'Copier le PIN'}
-                </button>
+              <div className="mb-8 flex flex-col items-stretch gap-8 md:flex-row md:items-center md:justify-center">
+                <JoinQrCode
+                  pin={String(session.pin_code)}
+                  size={200}
+                  className="md:shrink-0"
+                />
+                <div className="bg-card border-2 border-primary/40 rounded-xl p-8 text-center md:min-w-[280px]">
+                  <p className="text-sm text-muted-foreground mb-3 font-semibold uppercase tracking-wider">
+                    Code PIN
+                  </p>
+                  <p className="text-5xl font-black text-primary tracking-wider mb-4 md:text-6xl">
+                    {session.pin_code}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyToClipboard}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary/15 hover:bg-primary/25 text-primary rounded-lg transition-colors font-semibold text-sm"
+                  >
+                    <Copy className="w-4 h-4" />
+                    {copied ? 'Copié !' : 'Copier le PIN'}
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-3 text-sm mb-8">
-                <div className="flex flex-wrap items-center justify-center gap-2 text-muted-foreground">
-                  <span>Les étudiants ouvrent</span>
+              <div className="space-y-3 text-sm mb-8 text-center text-muted-foreground">
+                <p>
+                  Lien direct :{' '}
                   <Link
-                    href="/join"
-                    className="font-mono bg-muted px-2 py-1 rounded text-foreground underline-offset-4 hover:underline"
+                    href={`/join?pin=${encodeURIComponent(String(session.pin_code))}`}
+                    className="font-mono text-foreground underline-offset-4 hover:underline"
                   >
-                    /join
+                    /join?pin={session.pin_code}
                   </Link>
-                  <span>et entrent le PIN.</span>
-                </div>
+                </p>
               </div>
 
               <div className="space-y-3">

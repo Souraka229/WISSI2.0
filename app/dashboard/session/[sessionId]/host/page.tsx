@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { hostControlSession, getSessionLeaderboard } from '@/app/actions/quiz'
 import { fetchMergedSessionQuestions } from '@/lib/session-questions'
 import { Button } from '@/components/ui/button'
+import { JoinQrCode } from '@/components/join-qr-code'
 import {
   ArrowLeft,
   Loader2,
@@ -190,6 +191,20 @@ export default function HostSessionPage() {
             </span>
           </p>
         </section>
+
+        {status !== 'finished' && session.pin_code != null && (
+          <section className="rounded-2xl border border-border bg-muted/20 p-5">
+            <p className="text-center text-sm font-semibold text-foreground">
+              Inviter les joueurs
+            </p>
+            <p className="mt-1 text-center text-xs text-muted-foreground">
+              Scan du QR → page /join avec le PIN ; ils saisissent seulement leur pseudo.
+            </p>
+            <div className="mt-4 flex justify-center">
+              <JoinQrCode pin={String(session.pin_code)} size={176} />
+            </div>
+          </section>
+        )}
 
         {status === 'waiting' && (
           <Button
