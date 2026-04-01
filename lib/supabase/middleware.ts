@@ -1,5 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { safeAuthRedirectPath } from '@/lib/auth-redirect'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+
+function copyCookies(from: NextResponse, to: NextResponse) {
+  from.cookies.getAll().forEach((c) => {
+    to.cookies.set(c.name, c.value)
+  })
+}
 
 export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -13,49 +20,39 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Get the access token from cookies
-  const accessToken = request.cookies.get('sb-access-token')?.value
-  const refreshToken = request.cookies.get('sb-refresh-token')?.value
+  let supabaseResponse = NextResponse.next({
+    request: { headers: request.headers },
+  })
 
-  // Also check for the auth token in the standard Supabase cookie format
-  const authCookieName = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
-  const authCookie = request.cookies.get(authCookieName)?.value
-
-  let user = null
-
-  if (authCookie) {
-    try {
-      const parsed = JSON.parse(authCookie)
-      if (parsed?.access_token) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-          global: {
-            headers: {
-              Authorization: `Bearer ${parsed.access_token}`,
-            },
-          },
-        })
-        const { data } = await supabase.auth.getUser()
-        user = data?.user
-      }
-    } catch {
-      // Invalid cookie format
-    }
-  } else if (accessToken) {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
       },
-    })
-    const { data } = await supabase.auth.getUser()
-    user = data?.user
-  }
+      setAll(cookiesToSet, headers) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value)
+        })
+        supabaseResponse = NextResponse.next({
+          request: { headers: request.headers },
+        })
+        cookiesToSet.forEach(({ name, value, options }) => {
+          supabaseResponse.cookies.set(name, value, options)
+        })
+        Object.entries(headers).forEach(([key, value]) => {
+          supabaseResponse.headers.set(key, value)
+        })
+      },
+    },
+  })
 
-  // Protected routes check
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const protectedPaths = ['/dashboard', '/protected']
-  const isProtectedPath = protectedPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path)
+  const isProtectedPath = protectedPaths.some((path) =>
+    request.nextUrl.pathname.startsWith(path),
   )
 
   if (isProtectedPath && !user) {
@@ -65,17 +62,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Auth pages redirect if already logged in
   const authPaths = ['/auth/login', '/auth/sign-up']
-  const isAuthPath = authPaths.some(path => 
-    request.nextUrl.pathname === path
+  const isAuthPath = authPaths.some(
+    (path) => request.nextUrl.pathname === path,
   )
 
   if (isAuthPath && user) {
+    const nextPath = safeAuthRedirectPath(
+      request.nextUrl.searchParams.get('redirect'),
+    )
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+    url.pathname = nextPath
+    url.search = ''
+    const redirectResponse = NextResponse.redirect(url)
+    copyCookies(supabaseResponse, redirectResponse)
+    return redirectResponse
   }
 
-  return NextResponse.next()
+  return supabaseResponse
 }

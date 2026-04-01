@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Plus, Play, Settings, Trash2, BarChart3, LogOut } from 'lucide-react'
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-4">
+            <ThemeSwitcher />
             <span className="text-sm text-muted-foreground hidden sm:block">{user.email}</span>
             <form action="/api/auth/signout" method="post">
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-2">

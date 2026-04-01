@@ -1,37 +1,27 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
   const cookieStore = await cookies()
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  
-  // Get auth token from cookies
-  const authCookieName = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`
-  const authCookie = cookieStore.get(authCookieName)?.value
-  
-  let accessToken: string | undefined
-  
-  if (authCookie) {
-    try {
-      const parsed = JSON.parse(authCookie)
-      accessToken = parsed?.access_token
-    } catch {
-      // Invalid cookie format
-    }
-  }
-  
-  const client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    global: accessToken ? {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet, _headers) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options),
+            )
+          } catch {
+            // Appel depuis un Server Component : le middleware rafraîchira la session
+          }
+        },
       },
-    } : undefined,
-  })
-  
-  return client
+    },
+  )
 }

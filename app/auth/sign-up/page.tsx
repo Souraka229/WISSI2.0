@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { ArrowRight, ArrowLeft, Check } from 'lucide-react'
 
 export default function SignUpPage() {
@@ -54,7 +55,10 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="relative min-h-screen bg-background flex">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeSwitcher />
+      </div>
       {/* Left Side - Form */}
       <div className="flex-1 flex flex-col p-6 lg:p-12">
         {/* Back Link */}

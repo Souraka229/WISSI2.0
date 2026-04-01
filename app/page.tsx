@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -29,6 +30,7 @@ export default function LandingPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <ThemeSwitcher />
               <Link href="/auth/login">
                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   Connexion

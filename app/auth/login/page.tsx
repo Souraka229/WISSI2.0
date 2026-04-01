@@ -1,19 +1,22 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { safeAuthRedirectPath } from '@/lib/auth-redirect'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { ThemeSwitcher } from '@/components/theme-switcher'
 import { ArrowRight, ArrowLeft } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,7 +30,12 @@ export default function LoginPage() {
         password,
       })
       if (error) throw error
-      router.push('/dashboard')
+      const redirectTo = safeAuthRedirectPath(
+        searchParams.get('redirect'),
+        '/dashboard',
+      )
+      router.push(redirectTo)
+      router.refresh()
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'Une erreur est survenue')
     } finally {
@@ -36,7 +44,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="relative min-h-screen bg-background flex flex-col">
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeSwitcher />
+      </div>
       {/* Back Link */}
       <div className="p-6">
         <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -100,7 +111,7 @@ export default function LoginPage() {
                 disabled={isLoading || !email || !password}
                 className="w-full bg-foreground text-background hover:bg-foreground/90 gap-2 h-11 mt-2"
               >
-                {isLoading ? 'Connexion en cours...' : 'Se connecter'} 
+                {isLoading ? 'Connexion en cours...' : 'Se connecter'}
                 {!isLoading && <ArrowRight className="w-4 h-4" />}
               </Button>
             </form>
@@ -117,5 +128,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground text-sm">
+          Chargement…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }
