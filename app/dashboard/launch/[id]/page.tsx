@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { getQuiz, startSession } from '@/app/actions/quiz'
+import {
+  getQuiz,
+  getQuizzes,
+  startSession,
+  type GameMode,
+} from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
 import { Copy, Play, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -16,12 +21,20 @@ export default function LaunchPage() {
   const [isLaunching, setIsLaunching] = useState(false)
   const [copied, setCopied] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
+  const [gameMode, setGameMode] = useState<GameMode>('challenge_free')
+  const [secondaryQuizId, setSecondaryQuizId] = useState<string>('')
+  const [otherQuizzes, setOtherQuizzes] = useState<{ id: string; title: string }[]>([])
 
   useEffect(() => {
-    const loadQuiz = async () => {
+    const load = async () => {
       try {
-        const data = await getQuiz(quizId)
+        const [data, list] = await Promise.all([getQuiz(quizId), getQuizzes()])
         setQuiz(data)
+        setOtherQuizzes(
+          (list ?? [])
+            .filter((q: { id: string }) => q.id !== quizId)
+            .map((q: { id: string; title: string }) => ({ id: q.id, title: q.title })),
+        )
       } catch (error) {
         console.error('Error loading quiz:', error)
       } finally {
@@ -29,16 +42,25 @@ export default function LaunchPage() {
       }
     }
 
-    loadQuiz()
+    void load()
   }, [quizId])
 
   const handleLaunchSession = async () => {
     if (!quiz) return
 
+    if (gameMode === 'prof_dual' && !secondaryQuizId) {
+      setLaunchError('Choisissez le deuxième quiz pour le mode Défis du prof.')
+      return
+    }
+
     setIsLaunching(true)
     setLaunchError(null)
     try {
-      const newSession = await startSession(quizId)
+      const newSession = await startSession(quizId, {
+        gameMode,
+        secondaryQuizId:
+          gameMode === 'prof_dual' ? secondaryQuizId : null,
+      })
       if (!newSession?.id) {
         throw new Error('Réponse serveur invalide')
       }
@@ -142,6 +164,64 @@ export default function LaunchPage() {
                 </div>
               )}
 
+              <div className="mb-8 space-y-4 rounded-xl border border-border bg-muted/30 p-6 text-left">
+                <p className="text-sm font-semibold text-foreground">Type de partie</p>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-2 hover:bg-background/80">
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    checked={gameMode === 'challenge_free'}
+                    onChange={() => setGameMode('challenge_free')}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">Challenge libre</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Un quiz, session ouverte : les joueurs rejoignent en ligne avec le PIN.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-2 hover:bg-background/80">
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    checked={gameMode === 'prof_dual'}
+                    onChange={() => setGameMode('prof_dual')}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">Défis du prof</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Enchaîne deux quiz à la suite pour un double défi.
+                    </span>
+                  </span>
+                </label>
+                {gameMode === 'prof_dual' && (
+                  <div>
+                    <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                      Deuxième quiz
+                    </label>
+                    <select
+                      value={secondaryQuizId}
+                      onChange={(e) => setSecondaryQuizId(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
+                    >
+                      <option value="">— Choisir —</option>
+                      {otherQuizzes.map((q) => (
+                        <option key={q.id} value={q.id}>
+                          {q.title}
+                        </option>
+                      ))}
+                    </select>
+                    {otherQuizzes.length === 0 && (
+                      <p className="mt-2 text-xs text-destructive">
+                        Créez un autre quiz pour utiliser ce mode.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <Button
                 onClick={handleLaunchSession}
                 disabled={isLaunching || !quiz.questions?.length}
@@ -206,10 +286,17 @@ export default function LaunchPage() {
               </div>
 
               <div className="space-y-3">
-                <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-                  <Link href="/dashboard">
-                    Retour au tableau de bord
+                <Button
+                  asChild
+                  size="lg"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+                >
+                  <Link href={`/dashboard/session/${session.id}/host`}>
+                    Ouvrir le pupitre animateur
                   </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="w-full">
+                  <Link href="/dashboard">Retour au tableau de bord</Link>
                 </Button>
               </div>
 
