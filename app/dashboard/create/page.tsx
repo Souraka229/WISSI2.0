@@ -11,6 +11,7 @@ import Link from 'next/link'
 export default function CreateQuizPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -31,6 +32,7 @@ export default function CreateQuizPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setSubmitError(null)
 
     try {
       const quiz = await createQuiz(
@@ -39,10 +41,16 @@ export default function CreateQuizPage() {
         formData.theme,
         formData.level
       )
-      router.push(`/dashboard/quiz/${quiz[0].id}`)
+      if (!quiz?.id) {
+        throw new Error('Réponse serveur invalide')
+      }
+      router.push(`/dashboard/quiz/${quiz.id}`)
+      router.refresh()
     } catch (error) {
       console.error('Error creating quiz:', error)
-      alert('Erreur lors de la création du quiz')
+      const message =
+        error instanceof Error ? error.message : 'Erreur lors de la création du quiz'
+      setSubmitError(message)
     } finally {
       setIsLoading(false)
     }
@@ -68,6 +76,11 @@ export default function CreateQuizPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
+          {submitError && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {submitError}
+            </div>
+          )}
           <div className="bg-card border border-border rounded-xl p-8">
             {/* Title */}
             <div className="mb-6">
@@ -152,9 +165,9 @@ export default function CreateQuizPage() {
                   <Zap className="w-4 h-4 text-secondary" />
                 </div>
                 <div>
-                  <p className="font-medium mb-1">Génération IA disponible</p>
+                  <p className="font-medium mb-1">SuperPrompt (après création)</p>
                   <p className="text-sm text-muted-foreground">
-                    Après création, utilisez SuperPrompt pour générer vos questions automatiquement à partir de vos notes de cours.
+                    Sur la page du quiz : copiez un SuperPrompt prêt pour <strong>ChatGPT</strong>, collez la réponse JSON pour importer les QCM — ou utilisez la génération automatique si une clé API est configurée.
                   </p>
                 </div>
               </div>

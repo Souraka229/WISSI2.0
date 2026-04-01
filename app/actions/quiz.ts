@@ -19,13 +19,17 @@ export async function createQuiz(
     throw new Error('Not authenticated')
   }
 
-  const { data, error } = await supabase.from('quizzes').insert({
-    user_id: user.id,
-    title,
-    description,
-    theme,
-    level,
-  })
+  const { data, error } = await supabase
+    .from('quizzes')
+    .insert({
+      user_id: user.id,
+      title,
+      description: description || null,
+      theme,
+      level,
+    })
+    .select()
+    .single()
 
   if (error) throw error
 
