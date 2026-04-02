@@ -31,7 +31,10 @@ export async function fetchMergedSessionQuestions(
   if (e1) throw e1
   const list = [...(primary ?? [])]
 
-  if (session.secondary_quiz_id && session.game_mode === 'prof_dual') {
+  if (
+    session.secondary_quiz_id &&
+    (session.game_mode === 'prof_dual' || session.game_mode === 'hackathon')
+  ) {
     const { data: secondary, error: e2 } = await supabase
       .from('questions')
       .select(columns)

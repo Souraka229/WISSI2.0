@@ -11,7 +11,7 @@ import {
 } from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
 import { JoinQrCode } from '@/components/join-qr-code'
-import { Copy, Play, ArrowLeft, Loader2 } from 'lucide-react'
+import { Copy, Play, ArrowLeft, Loader2, Sparkles, Zap, Flame } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LaunchPage() {
@@ -52,8 +52,8 @@ export default function LaunchPage() {
   const handleLaunchSession = async () => {
     if (!quiz) return
 
-    if (gameMode === 'prof_dual' && !secondaryQuizId) {
-      setLaunchError('Choisissez le deuxième quiz pour le mode Défis du prof.')
+    if ((gameMode === 'prof_dual' || gameMode === 'hackathon') && !secondaryQuizId) {
+      setLaunchError('Choisissez le deuxième quiz pour ce mode (double quiz).')
       return
     }
 
@@ -63,7 +63,7 @@ export default function LaunchPage() {
       const newSession = await startSession(quizId, {
         gameMode,
         secondaryQuizId:
-          gameMode === 'prof_dual' ? secondaryQuizId : null,
+          gameMode === 'prof_dual' || gameMode === 'hackathon' ? secondaryQuizId : null,
         scoringMode,
       })
       if (!newSession?.id) {
@@ -198,22 +198,33 @@ export default function LaunchPage() {
               <div className="mb-6 space-y-3 rounded-xl border border-border bg-muted/30 p-6 text-left">
                 <p className="text-sm font-semibold text-foreground">Mode de scoring</p>
                 <p className="text-xs text-muted-foreground">
-                  Définit comment les points sont attribués pendant la session (stocké sur la session).
+                  Le barème de chaque question (ex. 1000 pts) s’applique selon le mode choisi : en vitesse ou
+                  précision, deux joueurs corrects n’auront pas forcément le même score.
                 </p>
                 <select
                   value={scoringMode}
                   onChange={(e) => setScoringMode(e.target.value as SessionScoringMode)}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
                 >
-                  <option value="classic">Classique — points pleins si bonne réponse</option>
-                  <option value="precision">Précision — met l’accent sur l’exactitude</option>
-                  <option value="speed">Vitesse — favorise les réponses les plus rapides</option>
+                  <option value="classic">
+                    Classique — bonne réponse = 100 % des points de la question (pas de bonus vitesse)
+                  </option>
+                  <option value="precision">
+                    Précision — plein pot si bonne réponse dans la 1re moitié du chrono, sinon ~55 % du max
+                  </option>
+                  <option value="speed">
+                    Vitesse — bonne réponse : entre ~25 % et 100 % du max selon la rapidité (linéaire sur le
+                    temps)
+                  </option>
                 </select>
               </div>
 
               <div className="mb-8 space-y-4 rounded-xl border border-border bg-muted/30 p-6 text-left">
                 <p className="text-sm font-semibold text-foreground">Type de partie</p>
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-2 hover:bg-background/80">
+                <p className="text-xs text-muted-foreground">
+                  Chaque mode a son sticker live sur le pupitre et chez les joueurs.
+                </p>
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent p-3 transition-colors hover:bg-background/80 has-[:checked]:border-emerald-500/35 has-[:checked]:bg-emerald-500/5">
                   <input
                     type="radio"
                     name="gameMode"
@@ -221,14 +232,20 @@ export default function LaunchPage() {
                     onChange={() => setGameMode('challenge_free')}
                     className="mt-1"
                   />
-                  <span>
-                    <span className="font-medium">Challenge libre</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Un quiz, session ouverte : les joueurs rejoignent en ligne avec le PIN.
+                  <span className="flex-1">
+                    <span className="flex flex-wrap items-center gap-2 font-medium">
+                      Challenge libre
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+                        <Sparkles className="h-3 w-3" />
+                        Live classe
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Un quiz, session ouverte : les joueurs rejoignent avec le PIN.
                     </span>
                   </span>
                 </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-2 hover:bg-background/80">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent p-3 transition-colors hover:bg-background/80 has-[:checked]:border-amber-500/40 has-[:checked]:bg-amber-500/5">
                   <input
                     type="radio"
                     name="gameMode"
@@ -236,14 +253,41 @@ export default function LaunchPage() {
                     onChange={() => setGameMode('prof_dual')}
                     className="mt-1"
                   />
-                  <span>
-                    <span className="font-medium">Défis du prof</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Enchaîne deux quiz à la suite pour un double défi.
+                  <span className="flex-1">
+                    <span className="flex flex-wrap items-center gap-2 font-medium">
+                      Double défi
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100">
+                        <Zap className="h-3 w-3" />
+                        2 quiz
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Enchaîne deux quiz à la suite (même énergie qu’un mini-hackathon pédagogique).
                     </span>
                   </span>
                 </label>
-                {gameMode === 'prof_dual' && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent p-3 transition-colors hover:bg-background/80 has-[:checked]:border-fuchsia-500/45 has-[:checked]:bg-fuchsia-500/5">
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    checked={gameMode === 'hackathon'}
+                    onChange={() => setGameMode('hackathon')}
+                    className="mt-1"
+                  />
+                  <span className="flex-1">
+                    <span className="flex flex-wrap items-center gap-2 font-medium">
+                      Hackathon live
+                      <span className="dashboard-live-sticker dashboard-live-sticker--hot inline-flex items-center gap-1 rounded-full border border-fuchsia-500/45 bg-gradient-to-r from-fuchsia-500/15 to-orange-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-950 dark:text-fuchsia-100">
+                        <Flame className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                        Intense
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Deux quiz enchaînés, rythme soutenu — idéal pour dynamiser une salle ou un événement.
+                    </span>
+                  </span>
+                </label>
+                {(gameMode === 'prof_dual' || gameMode === 'hackathon') && (
                   <div>
                     <label className="mb-2 block text-xs font-medium text-muted-foreground">
                       Deuxième quiz

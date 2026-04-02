@@ -25,7 +25,7 @@ const steps = [
   },
   {
     title: 'Lancer la session',
-    body: 'Sur la carte du quiz, Lancer → choisissez le mode (challenge libre ou deux quiz d’affilée). Vous obtenez un code PIN et un QR code à projeter ou à envoyer.',
+    body: 'Sur la carte du quiz, Lancer → choisissez le mode : challenge libre, double défi (2 quiz) ou hackathon live (2 quiz, rythme intense). Des stickers « Live » s’affichent sur le pupitre et chez les élèves. Puis code PIN et QR code.',
     href: '/dashboard',
     cta: 'Voir mes quiz',
   },

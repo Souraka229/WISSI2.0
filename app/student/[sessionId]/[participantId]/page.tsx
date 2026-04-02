@@ -12,6 +12,7 @@ import {
 import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
 import { liveMcqTileClass } from '@/lib/live-mcq-colors'
 import { submitAnswer, getSessionLeaderboard } from '@/app/actions/quiz'
+import { SessionLiveStickers } from '@/components/live/session-live-stickers'
 import { Button } from '@/components/ui/button'
 import {
   Loader2,
@@ -35,7 +36,7 @@ type ParticipantRow = {
 }
 
 type AnswerFeedback =
-  | { kind: 'submitted' }
+  | { kind: 'submitted'; pointsEarned: number; correct: boolean }
   | { kind: 'timeout_wait' }
   | { kind: 'duplicate' }
 
@@ -275,6 +276,7 @@ export default function StudentPlayerPage() {
   }, [sessionId, participantId, refreshMe, refreshLeaderboard])
 
   const status = session ? String(session.status) : ''
+  const sessionGameMode = session ? String(session.game_mode ?? '') : ''
   const qIndex = session ? Number(session.current_question_index ?? 0) : 0
   const currentQuestion = questions[qIndex]
 
@@ -394,7 +396,11 @@ export default function StudentPlayerPage() {
         } else if (fromTimeout || choice === null) {
           setAnswerFeedback({ kind: 'timeout_wait' })
         } else {
-          setAnswerFeedback({ kind: 'submitted' })
+          const pe =
+            res && 'pointsEarned' in res && typeof res.pointsEarned === 'number'
+              ? res.pointsEarned
+              : 0
+          setAnswerFeedback({ kind: 'submitted', pointsEarned: pe, correct: isCorrect })
         }
         await refreshMe()
         await refreshLeaderboard()
@@ -403,7 +409,7 @@ export default function StudentPlayerPage() {
         setAnswerFeedback(
           fromTimeout || choice === null
             ? { kind: 'timeout_wait' }
-            : { kind: 'submitted' },
+            : { kind: 'submitted', pointsEarned: 0, correct: isCorrect },
         )
       }
     },
@@ -594,6 +600,9 @@ export default function StudentPlayerPage() {
           aria-hidden
         />
         <div className="relative mx-auto flex max-w-lg flex-col space-y-8 text-center sm:max-w-xl animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex justify-center">
+            <SessionLiveStickers gameMode={sessionGameMode} />
+          </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
             <div className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-card/80 px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inline-flex sm:py-2.5">
               <Users className="h-5 w-5 shrink-0 text-primary" />
@@ -663,6 +672,7 @@ export default function StudentPlayerPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+            <SessionLiveStickers gameMode={sessionGameMode} className="sm:order-first" />
             {liveRealtimeBadge}
             <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-right sm:min-w-[9rem]">
               <p className="text-[10px] font-bold uppercase tracking-wide text-primary">Toi</p>
@@ -824,6 +834,7 @@ export default function StudentPlayerPage() {
           </div>
           <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-3 text-xs sm:mx-auto sm:max-w-2xl sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-3 sm:text-sm">
             <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <SessionLiveStickers gameMode={sessionGameMode} size="sm" />
               <Users className="h-4 w-4 shrink-0 text-primary/80" />
               <span className="font-medium">
                 <span className="tabular-nums">{onlineCount}</span> en ligne
@@ -913,9 +924,24 @@ export default function StudentPlayerPage() {
 
             <div className="mt-6 space-y-4 sm:mt-8">
               {!answered ? (
-                <p className="text-center text-sm leading-relaxed text-muted-foreground sm:text-base">
-                  Touche une couleur pour répondre — envoi immédiat, un seul choix.
-                </p>
+                <div className="space-y-2 text-center">
+                  <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+                    Touche une couleur pour répondre — envoi immédiat, un seul choix.
+                  </p>
+                  {String(session?.scoring_mode ?? 'classic') === 'speed' ? (
+                    <p className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-xs font-medium text-amber-950 dark:text-amber-100">
+                      Mode <strong>vitesse</strong> : plus tu réponds vite, plus tu marques de points (jusqu’au
+                      maximum de la question, ex. 1000 pts). À la fin du chrono, une bonne réponse vaut encore
+                      environ 25&nbsp;% du max.
+                    </p>
+                  ) : null}
+                  {String(session?.scoring_mode ?? 'classic') === 'precision' ? (
+                    <p className="rounded-xl border border-violet-500/25 bg-violet-500/8 px-3 py-2 text-xs font-medium text-violet-950 dark:text-violet-100">
+                      Mode <strong>précision</strong> : réponds dans la première moitié du temps pour le plein
+                      pot ; après, les points sont réduits même si c’est juste.
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <div className="space-y-3">
                   {answerFeedback && (
@@ -930,11 +956,25 @@ export default function StudentPlayerPage() {
                     >
                       {answerFeedback.kind === 'submitted' && (
                         <>
-                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-primary" />
-                          <p className="text-lg font-bold text-foreground">Réponse enregistrée</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Le bon résultat et les points seront visibles quand l’animateur affichera le
-                            classement.
+                          {answerFeedback.correct ? (
+                            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-primary" />
+                          ) : (
+                            <p className="mb-2 text-4xl" aria-hidden>
+                              ✗
+                            </p>
+                          )}
+                          <p className="text-lg font-bold text-foreground">
+                            {answerFeedback.correct ? 'Bonne réponse !' : 'Réponse enregistrée'}
+                          </p>
+                          <p className="mt-2 text-3xl font-black tabular-nums text-primary">
+                            {answerFeedback.pointsEarned > 0 ? '+' : ''}
+                            {answerFeedback.pointsEarned} pt
+                            {answerFeedback.pointsEarned !== 1 ? 's' : ''}
+                          </p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {answerFeedback.correct
+                              ? 'Le détail reste visible au classement affiché par l’animateur.'
+                              : 'Ce n’était pas la bonne réponse — le classement montrera la suite.'}
                           </p>
                         </>
                       )}

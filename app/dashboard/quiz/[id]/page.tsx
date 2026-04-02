@@ -928,7 +928,7 @@ export default function QuizEditorPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">
-                    Points
+                    Points (max par question)
                   </label>
                   <Input
                     type="number"
@@ -940,7 +940,13 @@ export default function QuizEditorPage() {
                       }))
                     }
                     min="10"
+                    max="10000"
+                    title="Ex. 1000 pour une grosse manche ; le mode vitesse/précision répartit une fraction de ce max."
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ex. 1000 — en mode vitesse, les plus rapides s’en rapprochent ; les plus lents gardent une
+                    part minimale si c’est juste.
+                  </p>
                 </div>
               </div>
 

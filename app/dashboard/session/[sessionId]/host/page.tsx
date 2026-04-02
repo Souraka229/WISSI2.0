@@ -19,6 +19,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { JoinQrCode } from '@/components/join-qr-code'
+import { SessionLiveStickers } from '@/components/live/session-live-stickers'
+import { liveModeLabel } from '@/lib/game-mode-live'
 import {
   ArrowLeft,
   Loader2,
@@ -430,8 +432,7 @@ export default function HostSessionPage() {
 
   const status = String(session.status)
   const idx = Number(session.current_question_index ?? 0)
-  const mode =
-    session.game_mode === 'prof_dual' ? 'Défis du prof (2 quiz)' : 'Challenge libre'
+  const mode = liveModeLabel(session.game_mode as string | null | undefined)
   const currentQ = questions[idx]
   const statusFr = STATUS_FR[status] ?? status
   const statusTone =
@@ -456,7 +457,10 @@ export default function HostSessionPage() {
           </Button>
           <div className="min-w-0 flex-1 basis-[min(100%,12rem)] sm:basis-auto">
             <h1 className="truncate text-base font-bold sm:text-lg">Pupitre animateur</h1>
-            <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
+            <div className="mt-1.5">
+              <SessionLiveStickers gameMode={String(session.game_mode ?? '')} size="sm" />
+            </div>
+            <p className="mt-1 truncate text-[11px] text-muted-foreground sm:text-xs">
               {quizTitle} · {mode}
             </p>
           </div>

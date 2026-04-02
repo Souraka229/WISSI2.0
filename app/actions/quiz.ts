@@ -8,9 +8,10 @@ import {
   type SessionRow,
 } from '@/lib/session-questions'
 import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
+import { computeAnswerPoints, scoringBudgetSeconds, SCORE_PER_LEVEL } from '@/lib/scoring'
 import { revalidateTag } from 'next/cache'
 
-export type GameMode = 'challenge_free' | 'prof_dual'
+export type GameMode = 'challenge_free' | 'prof_dual' | 'hackathon'
 export type SessionScoringMode = 'classic' | 'precision' | 'speed'
 
 export async function createQuiz(
@@ -407,10 +408,12 @@ export async function startSession(
   const gameMode = options?.gameMode ?? 'challenge_free'
   let secondaryQuizId: string | null = null
 
-  if (gameMode === 'prof_dual') {
+  const needsSecondQuiz = gameMode === 'prof_dual' || gameMode === 'hackathon'
+
+  if (needsSecondQuiz) {
     const sid = options?.secondaryQuizId
     if (!sid || sid === quizId) {
-      throw new Error('Choisissez un deuxième quiz différent pour les Défis du prof')
+      throw new Error('Choisissez un deuxième quiz différent pour le mode double quiz ou hackathon')
     }
     const { data: q2, error: e2 } = await supabase
       .from('quizzes')
@@ -437,8 +440,8 @@ export async function startSession(
       scoring_mode: scoringMode,
     }
 
-    if (gameMode === 'prof_dual' && secondaryQuizId) {
-      insertPayload.game_mode = 'prof_dual'
+    if (needsSecondQuiz && secondaryQuizId) {
+      insertPayload.game_mode = gameMode
       insertPayload.secondary_quiz_id = secondaryQuizId
     } else {
       insertPayload.game_mode = 'challenge_free'
@@ -926,14 +929,20 @@ export async function submitAnswer(
     return { duplicate: true as const }
   }
 
-  const { data: qRow } = await supabase
-    .from('questions')
-    .select('points')
-    .eq('id', questionId)
-    .maybeSingle()
+  const [{ data: sessionRow }, { data: qRow }] = await Promise.all([
+    supabase.from('sessions').select('scoring_mode').eq('id', sessionId).maybeSingle(),
+    supabase.from('questions').select('points, time_limit').eq('id', questionId).maybeSingle(),
+  ])
 
   const basePoints = typeof qRow?.points === 'number' ? qRow.points : 100
-  const pointsEarned = isCorrect ? basePoints : 0
+  const budgetSec = scoringBudgetSeconds(qRow?.time_limit)
+  const pointsEarned = computeAnswerPoints({
+    scoringMode: sessionRow?.scoring_mode ?? 'classic',
+    isCorrect,
+    basePoints,
+    timeTakenSec: timeTaken,
+    budgetSec,
+  })
 
   const { error } = await supabase.from('answers').insert({
     session_id: sessionId,
@@ -955,7 +964,7 @@ export async function submitAnswer(
 
   const prev = participant?.score ?? 0
   const newScore = prev + pointsEarned
-  const newLevel = Math.min(99, 1 + Math.floor(newScore / 200))
+  const newLevel = Math.min(99, 1 + Math.floor(newScore / SCORE_PER_LEVEL))
 
   await supabase
     .from('participants')
