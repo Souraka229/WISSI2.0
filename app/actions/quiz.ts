@@ -657,6 +657,8 @@ export async function getMyHostedSessions(): Promise<HostedSessionRow[]> {
     throw new Error('Not authenticated')
   }
 
+  // Deux FK sessions → quizzes (quiz_id + secondary_quiz_id après 002) : sans hint,
+  // PostgREST refuse l’embed (« more than one relationship ») → historique vide / erreur.
   const { data, error } = await supabase
     .from('sessions')
     .select(
@@ -668,13 +670,16 @@ export async function getMyHostedSessions(): Promise<HostedSessionRow[]> {
       ended_at,
       quiz_id,
       scoring_mode,
-      quizzes ( title )
+      quizzes!quiz_id ( title )
     `,
     )
     .eq('host_id', user.id)
     .order('created_at', { ascending: false })
     .limit(100)
 
-  if (error) throw error
+  if (error) {
+    console.error('[getMyHostedSessions]', error.message, error)
+    throw error
+  }
   return (data ?? []) as HostedSessionRow[]
 }

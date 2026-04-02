@@ -33,8 +33,12 @@ export default async function SessionsHistoryPage() {
   let loadError: string | null = null
   try {
     sessions = await getMyHostedSessions()
-  } catch {
-    loadError = 'Impossible de charger l’historique des sessions.'
+  } catch (e) {
+    console.error('[sessions history]', e)
+    loadError =
+      process.env.NODE_ENV === 'development' && e instanceof Error
+        ? `Impossible de charger l’historique : ${e.message}`
+        : 'Impossible de charger l’historique des sessions.'
   }
 
   return (

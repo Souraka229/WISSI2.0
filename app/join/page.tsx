@@ -6,7 +6,36 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import {
+  formatSupabaseBrowserRequestError,
+  isTransientSupabaseNetworkError,
+} from '@/lib/supabase/format-browser-request-error'
 import Link from 'next/link'
+
+function sleep(ms: number) {
+  return new Promise<void>((r) => setTimeout(r, ms))
+}
+
+/** Une seconde tentative après une erreur réseau évite les faux « serveur injoignable ». */
+async function sessionsByPinMaybe(
+  pin: string,
+  selectColumns: string,
+) {
+  const supabase = createClient()
+  const run = () =>
+    supabase
+      .from('sessions')
+      .select(selectColumns)
+      .eq('pin_code', pin)
+      .maybeSingle()
+
+  let result = await run()
+  if (result.error && isTransientSupabaseNetworkError(result.error)) {
+    await sleep(700)
+    result = await run()
+  }
+  return result
+}
 
 function JoinForm() {
   const router = useRouter()
@@ -45,19 +74,15 @@ function JoinForm() {
       setError('')
       setFromScan(true)
       try {
-        const supabase = createClient()
-        const { data, error: queryError } = await supabase
-          .from('sessions')
-          .select('id,status')
-          .eq('pin_code', pin)
-          .maybeSingle()
+        const { data, error: queryError } = await sessionsByPinMaybe(
+          pin,
+          'id,status',
+        )
 
         if (cancelled) return
         if (queryError) {
           console.error('[join] lookup session', queryError)
-          setError(
-            'Impossible de joindre le serveur. Vérifiez la connexion ou la configuration Supabase.',
-          )
+          setError(formatSupabaseBrowserRequestError(queryError))
           setStep('pin')
           autoCheckRef.current = null
           return
@@ -106,16 +131,11 @@ function JoinForm() {
     setError('')
 
     try {
-      const supabase = createClient()
-      const { data, error: queryError } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('pin_code', pin)
-        .maybeSingle()
+      const { data, error: queryError } = await sessionsByPinMaybe(pin, '*')
 
       if (queryError) {
         console.error('[join] pin submit', queryError)
-        setError('Erreur réseau ou serveur. Réessayez dans un instant.')
+        setError(formatSupabaseBrowserRequestError(queryError))
         return
       }
 
@@ -156,16 +176,14 @@ function JoinForm() {
         return
       }
 
-      const supabase = createClient()
-      const { data: session, error: sessionErr } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('pin_code', pin)
-        .maybeSingle()
+      const { data: session, error: sessionErr } = await sessionsByPinMaybe(
+        pin,
+        '*',
+      )
 
       if (sessionErr) {
         console.error('[join] nickname session', sessionErr)
-        setError('Erreur lors de la lecture de la session. Réessayez.')
+        setError(formatSupabaseBrowserRequestError(sessionErr))
         setIsLoading(false)
         return
       }
@@ -176,6 +194,7 @@ function JoinForm() {
         return
       }
 
+      const supabase = createClient()
       const { data: participant, error: participantError } = await supabase
         .from('participants')
         .insert({
