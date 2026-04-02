@@ -4,11 +4,32 @@ import Link from 'next/link'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { ArrowRight, Play, Users, BarChart3, Zap, Clock, Shield, Check } from 'lucide-react'
 
 export default function LandingPage() {
   const [pinCode, setPinCode] = useState('')
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setAuthLoading(false)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -31,16 +52,38 @@ export default function LandingPage() {
 
             <div className="flex items-center gap-3">
               <ThemeSwitcher />
-              <Link href="/auth/login">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  Connexion
-                </Button>
-              </Link>
-              <Link href="/auth/sign-up">
-                <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90">
-                  Commencer
-                </Button>
-              </Link>
+              {authLoading ? (
+                <div className="h-8 w-20 animate-pulse rounded-md bg-muted" aria-hidden />
+              ) : user ? (
+                <Link href="/dashboard">
+                  <Button
+                    size="sm"
+                    className="gap-2 bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    Mon tableau de bord
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/auth/login">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      Connexion
+                    </Button>
+                  </Link>
+                  <Link href="/auth/sign-up">
+                    <Button
+                      size="sm"
+                      className="bg-foreground text-background hover:bg-foreground/90"
+                    >
+                      Commencer
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -67,9 +110,16 @@ export default function LandingPage() {
                   Créer un compte gratuit <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="gap-2 h-12 px-6 text-base border-border hover:bg-card">
-                <Play className="w-4 h-4" /> Voir la démo
-              </Button>
+              <a href="#fonctionnalites">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 h-12 px-6 text-base border-border hover:bg-card"
+                  type="button"
+                >
+                  <Play className="w-4 h-4" /> Voir les fonctionnalités
+                </Button>
+              </a>
             </div>
           </div>
 

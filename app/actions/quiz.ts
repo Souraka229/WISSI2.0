@@ -6,6 +6,7 @@ import { countSessionQuestions } from '@/lib/session-questions'
 import { revalidateTag } from 'next/cache'
 
 export type GameMode = 'challenge_free' | 'prof_dual'
+export type SessionScoringMode = 'classic' | 'precision' | 'speed'
 
 export async function createQuiz(
   title: string,
@@ -54,7 +55,7 @@ export async function getQuizzes() {
 
   const { data, error } = await supabase
     .from('quizzes')
-    .select('*')
+    .select('*, questions(count)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -139,9 +140,103 @@ export async function createQuestion(
   return data
 }
 
+export async function deleteQuestion(questionId: string, quizId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data: owned, error: ownErr } = await supabase
+    .from('quizzes')
+    .select('id')
+    .eq('id', quizId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (ownErr) throw ownErr
+  if (!owned) {
+    throw new Error('Quiz introuvable ou accès refusé')
+  }
+
+  const { error } = await supabase
+    .from('questions')
+    .delete()
+    .eq('id', questionId)
+    .eq('quiz_id', quizId)
+
+  if (error) throw error
+
+  revalidateTag(`quiz-${quizId}`)
+  revalidateTag('quizzes')
+}
+
+export async function updateQuestion(
+  questionId: string,
+  quizId: string,
+  questionText: string,
+  questionType: string,
+  options: string[],
+  correctAnswer: string,
+  explanation: string,
+  timeLimit: number,
+  points: number,
+  difficulty: string,
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data: owned, error: ownErr } = await supabase
+    .from('quizzes')
+    .select('id')
+    .eq('id', quizId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (ownErr) throw ownErr
+  if (!owned) {
+    throw new Error('Quiz introuvable ou accès refusé')
+  }
+
+  const { error } = await supabase
+    .from('questions')
+    .update({
+      question_text: questionText,
+      question_type: questionType,
+      options,
+      correct_answer: correctAnswer,
+      explanation,
+      time_limit: timeLimit,
+      points,
+      difficulty,
+    })
+    .eq('id', questionId)
+    .eq('quiz_id', quizId)
+
+  if (error) throw error
+
+  revalidateTag(`quiz-${quizId}`)
+  revalidateTag('quizzes')
+}
+
 export async function startSession(
   quizId: string,
-  options?: { gameMode?: GameMode; secondaryQuizId?: string | null },
+  options?: {
+    gameMode?: GameMode
+    secondaryQuizId?: string | null
+    scoringMode?: SessionScoringMode
+  },
 ) {
   const supabase = await createClient()
 
@@ -188,11 +283,14 @@ export async function startSession(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const pinCode = String(randomInt(100000, 1000000))
 
+    const scoringMode = options?.scoringMode ?? 'classic'
+
     const insertPayload: Record<string, unknown> = {
       quiz_id: quizId,
       host_id: user.id,
       pin_code: pinCode,
       status: 'waiting',
+      scoring_mode: scoringMode,
     }
 
     if (gameMode === 'prof_dual' && secondaryQuizId) {
@@ -535,4 +633,48 @@ export async function getSessionResults(sessionId: string) {
 
   if (error) throw error
   return data
+}
+
+export type HostedSessionRow = {
+  id: string
+  pin_code: string
+  status: string
+  created_at: string
+  ended_at: string | null
+  quiz_id: string
+  scoring_mode: string | null
+  quizzes: { title: string } | null
+}
+
+export async function getMyHostedSessions(): Promise<HostedSessionRow[]> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Not authenticated')
+  }
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .select(
+      `
+      id,
+      pin_code,
+      status,
+      created_at,
+      ended_at,
+      quiz_id,
+      scoring_mode,
+      quizzes ( title )
+    `,
+    )
+    .eq('host_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (error) throw error
+  return (data ?? []) as HostedSessionRow[]
 }

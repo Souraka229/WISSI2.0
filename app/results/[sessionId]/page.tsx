@@ -1,22 +1,64 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Download, FileText, Share2, ArrowLeft, Loader2, Medal } from 'lucide-react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Download, ArrowLeft, Loader2 } from 'lucide-react'
 
-interface Results {
-  session: any
-  participants: any[]
-  answers: any[]
-  stats: any
+const ResultsPdfExportButton = dynamic(
+  () =>
+    import('@/components/results/results-pdf-export-button').then((m) => m.ResultsPdfExportButton),
+  {
+    ssr: false,
+    loading: () => (
+      <Button variant="outline" size="sm" className="gap-2" disabled>
+        PDF…
+      </Button>
+    ),
+  },
+)
+
+type SessionRow = {
+  id: string
+  current_question_index: number
+  pin_code?: string | null
+}
+
+type ParticipantRow = {
+  id: string
+  nickname: string
+  score: number | null
+  max_streak?: number | null
+}
+
+type AnswerRow = {
+  participant_id: string
+  is_correct: boolean | null
+  points_earned?: number | null
+}
+
+type ResultsStats = {
+  totalParticipants: number
+  totalQuestions: number
+  averageScore: number
+  correctAnswers: number
+  totalAnswers: number
+  correctPercentage: number
+}
+
+type ResultsPayload = {
+  session: SessionRow
+  participants: ParticipantRow[]
+  answers: AnswerRow[]
+  stats: ResultsStats
 }
 
 export default function ResultsPage() {
   const params = useParams()
   const sessionId = params.sessionId as string
-  const [results, setResults] = useState<Results | null>(null)
+  const [results, setResults] = useState<ResultsPayload | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,38 +66,57 @@ export default function ResultsPage() {
     const loadResults = async () => {
       try {
         const response = await fetch(`/api/sessions/${sessionId}/results`)
-        if (!response.ok) throw new Error('Failed to load results')
-        const data = await response.json()
+        if (!response.ok) throw new Error('Échec du chargement des résultats')
+        const data = (await response.json()) as ResultsPayload
         setResults(data)
       } catch (err) {
         console.error('Error:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load results')
+        setError(
+          err instanceof Error ? err.message : 'Impossible de charger les résultats',
+        )
       } finally {
         setIsLoading(false)
       }
     }
 
-    loadResults()
+    void loadResults()
   }, [sessionId])
 
   const exportAsCSV = () => {
     if (!results) return
 
-    const headers = ['Rank', 'Name', 'Score', 'Correct Answers', 'Accuracy', 'Max Streak']
+    const headers = [
+      'Rang',
+      'Pseudo',
+      'Score',
+      'Bonnes réponses',
+      'Précision',
+      'Meilleure série',
+    ]
     const rows = results.participants.map((p, idx) => {
       const participantAnswers = results.answers.filter((a) => a.participant_id === p.id)
       const correctCount = participantAnswers.filter((a) => a.is_correct).length
-      const accuracy = participantAnswers.length > 0 ? Math.round((correctCount / participantAnswers.length) * 100) : 0
+      const accuracy =
+        participantAnswers.length > 0
+          ? Math.round((correctCount / participantAnswers.length) * 100)
+          : 0
 
-      return [idx + 1, p.nickname, p.score || 0, correctCount, `${accuracy}%`, p.max_streak || 0]
+      return [
+        idx + 1,
+        p.nickname,
+        p.score ?? 0,
+        correctCount,
+        `${accuracy}%`,
+        p.max_streak ?? 0,
+      ]
     })
 
     const csv = [headers, ...rows].map((row) => row.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `quiz-results-${sessionId}.csv`
+    a.download = `resultats-quiz-${sessionId}.csv`
     document.body.appendChild(a)
     a.click()
     window.URL.revokeObjectURL(url)
@@ -64,20 +125,22 @@ export default function ResultsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   if (error || !results) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-4">Unable to Load Results</h2>
-          <p className="text-muted-foreground mb-8">{error}</p>
+          <h2 className="mb-4 text-2xl font-bold text-foreground">
+            Impossible de charger les résultats
+          </h2>
+          <p className="mb-8 text-muted-foreground">{error}</p>
           <Link href="/dashboard">
-            <Button>Back to Dashboard</Button>
+            <Button>Retour au tableau de bord</Button>
           </Link>
         </div>
       </div>
@@ -86,97 +149,83 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
+      <div className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-4 h-4" />
+              <Button variant="ghost" size="icon" aria-label="Retour">
+                <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Quiz Results</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                {results.stats.totalParticipants} participants, {results.stats.correctPercentage}% average accuracy
+              <h1 className="text-3xl font-bold text-foreground">Résultats du quiz</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {results.stats.totalParticipants} participant
+                {results.stats.totalParticipants !== 1 ? 's' : ''},{' '}
+                {results.stats.correctPercentage}% de précision moyenne sur les réponses
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" className="gap-2" onClick={exportAsCSV}>
-              <Download className="w-4 h-4" /> Export CSV
+              <Download className="h-4 w-4" /> Exporter CSV
             </Button>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Share2 className="w-4 h-4" /> Share
-            </Button>
+            <ResultsPdfExportButton results={results} />
           </div>
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Statistics Cards */}
-        <div className="grid md:grid-cols-4 gap-6 mb-12">
+      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mb-12 grid gap-6 md:grid-cols-4">
+          <StatCard label="Participants" value={results.stats.totalParticipants} icon="👥" />
+          <StatCard label="Score moyen" value={results.stats.averageScore} icon="📊" />
           <StatCard
-            label="Total Participants"
-            value={results.stats.totalParticipants}
-            icon="👥"
-          />
-          <StatCard
-            label="Average Score"
-            value={results.stats.averageScore}
-            icon="📊"
-          />
-          <StatCard
-            label="Correct Answers"
+            label="Bonnes réponses"
             value={`${results.stats.correctAnswers}/${results.stats.totalAnswers}`}
             icon="✅"
           />
-          <StatCard
-            label="Overall Accuracy"
-            value={`${results.stats.correctPercentage}%`}
-            icon="🎯"
-          />
+          <StatCard label="Précision globale" value={`${results.stats.correctPercentage}%`} icon="🎯" />
         </div>
 
-        {/* Leaderboard */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-8 py-6 border-b border-border">
-            <h2 className="text-2xl font-bold text-foreground">Leaderboard</h2>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="border-b border-border px-8 py-6">
+            <h2 className="text-2xl font-bold text-foreground">Classement</h2>
           </div>
 
           <div className="divide-y divide-border">
             {results.participants.map((participant, idx) => {
-              const participantAnswers = results.answers.filter((a) => a.participant_id === participant.id)
+              const participantAnswers = results.answers.filter(
+                (a) => a.participant_id === participant.id,
+              )
               const correctCount = participantAnswers.filter((a) => a.is_correct).length
-              const accuracy = participantAnswers.length > 0 ? Math.round((correctCount / participantAnswers.length) * 100) : 0
+              const accuracy =
+                participantAnswers.length > 0
+                  ? Math.round((correctCount / participantAnswers.length) * 100)
+                  : 0
 
               return (
                 <div
                   key={participant.id}
-                  className="px-8 py-6 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                  className="flex flex-col gap-4 px-8 py-6 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-lg">
-                      {idx < 3 ? (
-                        <span>{'🥇🥈🥉'[idx]}</span>
-                      ) : (
-                        idx + 1
-                      )}
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-secondary text-lg font-bold text-white">
+                      {idx < 3 ? <span>{'🥇🥈🥉'[idx]}</span> : idx + 1}
                     </div>
                     <div>
-                      <p className="font-bold text-foreground text-lg">{participant.nickname}</p>
-                      <div className="flex gap-4 text-sm text-muted-foreground mt-1">
-                        <span>Streak: {participant.max_streak || 0}</span>
+                      <p className="text-lg font-bold text-foreground">{participant.nickname}</p>
+                      <div className="mt-1 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                        <span>Meilleure série : {participant.max_streak ?? 0}</span>
                         <span>•</span>
-                        <span>Answered: {participantAnswers.length}</span>
+                        <span>Réponses : {participantAnswers.length}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <p className="text-3xl font-bold text-primary">{participant.score || 0}</p>
+                  <div className="text-right sm:text-right">
+                    <p className="text-3xl font-bold text-primary">{participant.score ?? 0}</p>
                     <p className="text-sm text-muted-foreground">
-                      {correctCount}/{participantAnswers.length} correct ({accuracy}%)
+                      {correctCount}/{participantAnswers.length} bonnes ({accuracy}%)
                     </p>
                   </div>
                 </div>
@@ -199,10 +248,10 @@ function StatCard({
   icon: string
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-6">
-      <div className="flex items-start justify-between mb-4">
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="mb-4 flex items-start justify-between">
         <div>
-          <p className="text-sm text-muted-foreground mb-1">{label}</p>
+          <p className="mb-1 text-sm text-muted-foreground">{label}</p>
           <p className="text-3xl font-bold text-foreground">{value}</p>
         </div>
         <span className="text-3xl">{icon}</span>

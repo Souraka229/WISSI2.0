@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import { getQuiz, createQuestion } from '@/app/actions/quiz'
+import { useParams, useRouter } from 'next/navigation'
+import { createQuestion, deleteQuestion, getQuiz, updateQuestion } from '@/app/actions/quiz'
 import {
   generateQuestionsWithSuperPrompt,
   importQuestionsFromChatGptJson,
@@ -19,8 +19,21 @@ import {
   ClipboardPaste,
   Play,
   HelpCircle,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import Link from 'next/link'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 /** Copie avec API Clipboard ; repli textarea + execCommand si navigateur / contexte HTTP bloque. */
 async function copyTextToClipboard(text: string): Promise<void> {
@@ -82,10 +95,12 @@ function SuperPromptPreview({
 
 export default function QuizEditorPage() {
   const params = useParams()
+  const router = useRouter()
   const quizId = params.id as string
   const [quiz, setQuiz] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showAddQuestion, setShowAddQuestion] = useState(false)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     questionText: '',
     questionType: 'mcq',
@@ -193,38 +208,94 @@ export default function QuizEditorPage() {
     }
   }
 
-  const handleAddQuestion = async (e: React.FormEvent) => {
+  const resetQuestionForm = () => {
+    setFormData({
+      questionText: '',
+      questionType: 'mcq',
+      options: ['', '', '', ''],
+      correctAnswer: '0',
+      explanation: '',
+      timeLimit: 30,
+      points: 100,
+      difficulty: 'medium',
+    })
+    setEditingQuestionId(null)
+  }
+
+  const openNewQuestion = () => {
+    resetQuestionForm()
+    setShowAddQuestion(true)
+  }
+
+  const openEditQuestion = (q: {
+    id: string
+    question_text: string
+    question_type: string
+    options?: unknown
+    correct_answer?: string | number
+    explanation?: string | null
+    time_limit?: number | null
+    points?: number | null
+    difficulty?: string | null
+  }) => {
+    const rawOpts = Array.isArray(q.options) ? q.options.map((x) => String(x)) : []
+    const padded = [...rawOpts]
+    while (padded.length < 4) padded.push('')
+    setFormData({
+      questionText: q.question_text ?? '',
+      questionType: q.question_type ?? 'mcq',
+      options: padded.slice(0, 4),
+      correctAnswer: String(q.correct_answer ?? '0'),
+      explanation: q.explanation ?? '',
+      timeLimit: typeof q.time_limit === 'number' ? q.time_limit : 30,
+      points: typeof q.points === 'number' ? q.points : 100,
+      difficulty: q.difficulty ?? 'medium',
+    })
+    setEditingQuestionId(q.id)
+    setShowAddQuestion(true)
+  }
+
+  const handleQuestionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await createQuestion(
-        quizId,
-        formData.questionText,
-        formData.questionType,
-        formData.options.filter((o) => o),
-        formData.correctAnswer,
-        formData.explanation,
-        formData.timeLimit,
-        formData.points,
-        formData.difficulty,
-        quiz.questions?.length ?? 0,
-      )
+      const optionsForDb =
+        formData.questionType === 'mcq' ? formData.options.filter((o) => o.trim()) : []
 
-      setFormData({
-        questionText: '',
-        questionType: 'mcq',
-        options: ['', '', '', ''],
-        correctAnswer: '0',
-        explanation: '',
-        timeLimit: 30,
-        points: 100,
-        difficulty: 'medium',
-      })
-      setShowAddQuestion(false)
+      if (editingQuestionId) {
+        await updateQuestion(
+          editingQuestionId,
+          quizId,
+          formData.questionText,
+          formData.questionType,
+          optionsForDb,
+          formData.correctAnswer,
+          formData.explanation,
+          formData.timeLimit,
+          formData.points,
+          formData.difficulty,
+        )
+      } else {
+        await createQuestion(
+          quizId,
+          formData.questionText,
+          formData.questionType,
+          optionsForDb,
+          formData.correctAnswer,
+          formData.explanation,
+          formData.timeLimit,
+          formData.points,
+          formData.difficulty,
+          quiz.questions?.length ?? 0,
+        )
+      }
 
       const updatedQuiz = await getQuiz(quizId)
       setQuiz(updatedQuiz)
+      setShowAddQuestion(false)
+      resetQuestionForm()
+      router.refresh()
     } catch (error) {
-      console.error('Error adding question:', error)
+      console.error('Error saving question:', error)
     }
   }
 
@@ -308,7 +379,7 @@ export default function QuizEditorPage() {
                 variant="outline"
                 size="sm"
                 className="font-semibold"
-                onClick={() => setShowAddQuestion(true)}
+                onClick={() => openNewQuestion()}
               >
                 Saisir une question à la main
               </Button>
@@ -487,10 +558,18 @@ export default function QuizEditorPage() {
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-bold text-foreground">Questions du quiz</h2>
             <Button
-              onClick={() => setShowAddQuestion(!showAddQuestion)}
+              onClick={() => {
+                if (showAddQuestion) {
+                  setShowAddQuestion(false)
+                  resetQuestionForm()
+                } else {
+                  openNewQuestion()
+                }
+              }}
               className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <Plus className="h-4 w-4" /> Ajouter une question
+              <Plus className="h-4 w-4" />{' '}
+              {showAddQuestion ? 'Fermer le formulaire' : 'Ajouter une question'}
             </Button>
           </div>
 
@@ -501,13 +580,64 @@ export default function QuizEditorPage() {
                   key={q.id}
                   className="bg-card border border-border rounded-lg p-6 hover:border-primary/40 transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="mb-3 flex items-start justify-between gap-3">
                     <h3 className="text-lg font-semibold text-foreground">
                       {idx + 1}. {q.question_text}
                     </h3>
-                    <span className="text-xs px-2 py-1 bg-primary/15 text-primary rounded-full">
-                      {q.question_type}
-                    </span>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <span className="rounded-full bg-primary/15 px-2 py-1 text-xs text-primary">
+                        {q.question_type}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Modifier la question"
+                        onClick={() => openEditQuestion(q)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            aria-label="Supprimer la question"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Supprimer cette question ?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Cette action est irréversible. La question sera retirée du quiz.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={async () => {
+                                try {
+                                  await deleteQuestion(q.id, quizId)
+                                  const updatedQuiz = await getQuiz(quizId)
+                                  setQuiz(updatedQuiz)
+                                  router.refresh()
+                                } catch (err) {
+                                  console.error(err)
+                                }
+                              }}
+                            >
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -533,8 +663,10 @@ export default function QuizEditorPage() {
         {/* Add Question Form */}
         {showAddQuestion && (
           <div className="bg-card border border-border rounded-xl p-8 mb-8">
-            <h3 className="mb-6 text-lg font-bold text-foreground">Nouvelle question</h3>
-            <form onSubmit={handleAddQuestion} className="space-y-6">
+            <h3 className="mb-6 text-lg font-bold text-foreground">
+              {editingQuestionId ? 'Modifier la question' : 'Nouvelle question'}
+            </h3>
+            <form onSubmit={handleQuestionSubmit} className="space-y-6">
               {/* Question Text */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-foreground">
@@ -680,7 +812,10 @@ export default function QuizEditorPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowAddQuestion(false)}
+                  onClick={() => {
+                    setShowAddQuestion(false)
+                    resetQuestionForm()
+                  }}
                   className="flex-1"
                 >
                   Annuler
@@ -689,7 +824,7 @@ export default function QuizEditorPage() {
                   type="submit"
                   className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  Enregistrer la question
+                  {editingQuestionId ? 'Enregistrer les modifications' : 'Enregistrer la question'}
                 </Button>
               </div>
             </form>

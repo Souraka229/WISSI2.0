@@ -23,6 +23,7 @@ export type TeacherQuizRow = {
   description: string | null
   level: string | null
   theme: string | null
+  questionCount?: number
 }
 
 type Props = {
@@ -75,6 +76,10 @@ export function TeacherQuizGrid({ quizzes }: Props) {
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+                  {quiz.questionCount ?? 0}{' '}
+                  {(quiz.questionCount ?? 0) === 1 ? 'question' : 'questions'}
+                </span>
                 {quiz.level && (
                   <span className="rounded-full bg-secondary/15 px-2.5 py-1 font-medium text-secondary-foreground">
                     {quiz.level}

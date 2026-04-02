@@ -2,6 +2,15 @@
 
 Plateforme de **quiz interactif multijoueur en temps réel** (Next.js, Supabase) : sessions par **PIN** et **QR code**, pupitre animateur, classement live, SuperPrompt / IA pour les QCM.
 
+## ⚡ SETUP CRITIQUE — À FAIRE EN PREMIER
+
+1. Exécuter `scripts/001_create_schema.sql` dans Supabase SQL Editor  
+2. Exécuter `scripts/002_live_game_modes.sql`  
+3. Exécuter `scripts/003_enable_realtime.sql` (sans cette étape, le **temps réel** host / élève ne reçoit pas les événements)  
+4. Copier `.env.example` → `.env.local` et remplir les variables  
+
+*(Optionnel : `scripts/003_superadmin_analytics.sql` pour l’espace superadmin / analytics — autre fichier, ne remplace pas l’étape 3.)*
+
 ## Documentation
 
 | Document | Contenu |

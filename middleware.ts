@@ -14,6 +14,8 @@ export const config = {
      */
     '/dashboard',
     '/dashboard/:path*',
+    '/superadmin',
+    '/superadmin/:path*',
     '/protected',
     '/protected/:path*',
     '/auth',

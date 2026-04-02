@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { PageViewTracker } from '@/components/analytics/page-view-tracker'
+import { CookieConsentBanner } from '@/components/consent/cookie-consent-banner'
 import { ThemeProvider } from '@/components/theme-provider'
 import { OrganizationJsonLd } from '@/components/seo/organization-json-ld'
 import { getSiteUrl } from '@/lib/site-url'
@@ -98,6 +100,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <CookieConsentBanner />
+          <PageViewTracker />
         </ThemeProvider>
         <Analytics />
       </body>

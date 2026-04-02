@@ -1,12 +1,12 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Button } from '@/components/ui/button'
-import { Plus, LogOut, LayoutDashboard, UserPlus, HelpCircle } from 'lucide-react'
-import { getQuizzes } from '@/app/actions/quiz'
-import { TeacherQuizGrid } from '@/components/dashboard/teacher-quiz-grid'
-import { TeacherComfortZone } from '@/components/dashboard/teacher-comfort-zone'
+import { Plus, LogOut, LayoutDashboard, UserPlus, HelpCircle, User, History } from 'lucide-react'
+import { QuizGridSkeleton } from '@/components/dashboard/quiz-grid-skeleton'
+import { DashboardQuizGridSection } from './dashboard-quiz-grid-section'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -18,16 +18,6 @@ export default async function DashboardPage() {
   if (!user) {
     redirect('/auth/login')
   }
-
-  const quizzes = await getQuizzes()
-
-  const rows = (quizzes ?? []).map((q) => ({
-    id: q.id,
-    title: q.title,
-    description: q.description,
-    level: q.level,
-    theme: q.theme,
-  }))
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -47,8 +37,19 @@ export default async function DashboardPage() {
 
           <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" size="icon" className="sm:hidden" asChild>
+              <Link href="/dashboard/sessions" aria-label="Mes sessions">
+                <History className="h-5 w-5" />
+              </Link>
+            </Button>
+            <Button variant="ghost" size="icon" className="sm:hidden" asChild>
               <Link href="/aide" aria-label="Aide enseignant">
                 <HelpCircle className="h-5 w-5" />
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="hidden gap-1.5 font-semibold sm:inline-flex" asChild>
+              <Link href="/dashboard/sessions">
+                <History className="h-4 w-4" />
+                Mes sessions
               </Link>
             </Button>
             <Button variant="ghost" size="sm" className="hidden gap-1.5 font-semibold sm:inline-flex" asChild>
@@ -58,6 +59,11 @@ export default async function DashboardPage() {
               </Link>
             </Button>
             <ThemeSwitcher />
+            <Button variant="ghost" size="icon" asChild aria-label="Mon profil">
+              <Link href="/dashboard/profile">
+                <User className="h-5 w-5" />
+              </Link>
+            </Button>
             <span className="hidden max-w-[200px] truncate text-sm text-muted-foreground md:block">
               {user.email}
             </span>
@@ -111,8 +117,9 @@ export default async function DashboardPage() {
       </section>
 
       <main className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-        <TeacherComfortZone quizCount={rows.length} />
-        <TeacherQuizGrid quizzes={rows} />
+        <Suspense fallback={<QuizGridSkeleton />}>
+          <DashboardQuizGridSection />
+        </Suspense>
       </main>
     </div>
   )

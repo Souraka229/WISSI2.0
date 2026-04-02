@@ -40,14 +40,25 @@ type AnswerFeedback =
   | { kind: 'timeout'; pointsEarned: number }
   | { kind: 'duplicate'; pointsEarned: number }
 
+type QuestionRow = {
+  id: string
+  question_text: string
+  question_type?: string
+  correct_answer?: string | number
+  options?: string[]
+  time_limit?: number
+  explanation?: string
+}
+
 export default function StudentPlayerPage() {
   const params = useParams()
   const sessionId = params.sessionId as string
   const participantId = params.participantId as string
 
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
   const [session, setSession] = useState<Record<string, unknown> | null>(null)
-  const [questions, setQuestions] = useState<any[]>([])
+  const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [me, setMe] = useState<ParticipantRow | null>(null)
   const [leaderboard, setLeaderboard] = useState<
     { rank: number; nickname: string; score: number; level: number; id?: string }[]
@@ -60,7 +71,15 @@ export default function StudentPlayerPage() {
   const [recentReactions, setRecentReactions] = useState<string[]>([])
   const [onlineCount, setOnlineCount] = useState(1)
   const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<
+    'connecting' | 'connected' | 'error'
+  >('connecting')
   const questionKeyRef = useRef<string>('')
+  const questionsRef = useRef<QuestionRow[]>([])
+
+  useEffect(() => {
+    questionsRef.current = questions
+  }, [questions])
 
   const refreshLeaderboard = useCallback(async () => {
     try {
@@ -80,7 +99,7 @@ export default function StudentPlayerPage() {
       .eq('id', participantId)
       .single()
     if (data) setMe(data as ParticipantRow)
-  }, [supabase, participantId])
+  }, [participantId])
 
   useEffect(() => {
     let cancelled = false
@@ -103,7 +122,7 @@ export default function StudentPlayerPage() {
 
         if (cancelled) return
         setSession(sessionData as Record<string, unknown>)
-        setQuestions(merged)
+        setQuestions(merged as QuestionRow[])
         await refreshMe()
         await refreshLeaderboard()
       } finally {
@@ -119,13 +138,30 @@ export default function StudentPlayerPage() {
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'sessions',
           filter: `id=eq.${sessionId}`,
         },
         (p) => {
-          setSession(p.new as Record<string, unknown>)
+          const newSession = p.new as Record<string, unknown>
+          const oldIdx = Number(
+            (p.old as Record<string, unknown> | undefined)?.current_question_index ??
+              -1,
+          )
+          const newIdx = Number(newSession.current_question_index ?? 0)
+
+          setSession(newSession)
+
+          if (oldIdx !== newIdx) {
+            const merged = questionsRef.current
+            const limit = Math.max(5, Number(merged[newIdx]?.time_limit ?? 30))
+            setTimeLeft(limit)
+            setAnswered(false)
+            setSelectedAnswer(null)
+            setAnswerFeedback(null)
+            questionKeyRef.current = String(newIdx)
+          }
         },
       )
       .on(
@@ -155,7 +191,15 @@ export default function StudentPlayerPage() {
           }
         },
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          if (!cancelled) setRealtimeStatus('connected')
+        }
+        if (err) console.error('[STUDENT] Realtime erreur', err)
+        if (err || status === 'CHANNEL_ERROR') {
+          if (!cancelled) setRealtimeStatus('error')
+        }
+      })
 
     const presence = supabase.channel(`presence:${sessionId}`, {
       config: { presence: { key: participantId } },
@@ -191,7 +235,7 @@ export default function StudentPlayerPage() {
       void supabase.removeChannel(liveCh)
       void supabase.removeChannel(presence)
     }
-  }, [sessionId, participantId, supabase, refreshMe, refreshLeaderboard])
+  }, [sessionId, participantId, refreshMe, refreshLeaderboard])
 
   const status = session ? String(session.status) : ''
   const qIndex = session ? Number(session.current_question_index ?? 0) : 0
@@ -302,6 +346,33 @@ export default function StudentPlayerPage() {
     }
   }
 
+  const liveRealtimeBadge = (
+    <div
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+        realtimeStatus === 'connected'
+          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+          : realtimeStatus === 'error'
+            ? 'bg-destructive/15 text-destructive'
+            : 'bg-muted text-muted-foreground'
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          realtimeStatus === 'connected'
+            ? 'animate-pulse bg-emerald-500'
+            : realtimeStatus === 'error'
+              ? 'bg-destructive'
+              : 'bg-muted-foreground'
+        }`}
+      />
+      {realtimeStatus === 'connected'
+        ? 'Live'
+        : realtimeStatus === 'error'
+          ? 'Déconnecté'
+          : 'Connexion…'}
+    </div>
+  )
+
   if (loading) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-gradient-to-b from-primary/5 to-background px-8">
@@ -354,9 +425,12 @@ export default function StudentPlayerPage() {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-b from-primary/15 via-background to-violet-500/5 px-4 py-8">
         <div className="mx-auto max-w-md space-y-8 pt-10 text-center animate-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/90 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
-            <Users className="h-4 w-4 text-primary" />
-            <span className="font-medium">{onlineCount} connecté(s)</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/90 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="font-medium">{onlineCount} connecté(s)</span>
+            </div>
+            {liveRealtimeBadge}
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-tight">Salle d’attente</h1>
@@ -389,7 +463,7 @@ export default function StudentPlayerPage() {
   if (status === 'results') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-b from-violet-500/10 via-background to-background px-4 pb-28 pt-6 animate-in zoom-in-95 duration-300">
-        <header className="mx-auto mb-6 flex max-w-lg items-center justify-between gap-4">
+        <header className="mx-auto mb-6 flex max-w-lg flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 shrink-0 text-violet-500" />
             <div>
@@ -397,6 +471,7 @@ export default function StudentPlayerPage() {
               <p className="text-lg font-black">TOP 5</p>
             </div>
           </div>
+          {liveRealtimeBadge}
           <div className="text-right text-sm">
             <p className="font-semibold text-primary">Vous</p>
             <p className="tabular-nums">
@@ -507,9 +582,10 @@ export default function StudentPlayerPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 px-4 py-2.5 text-xs">
-            <span className="text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
               <Users className="mr-1 inline h-3 w-3" />
               {onlineCount} en ligne
+              {liveRealtimeBadge}
             </span>
             <span className="tabular-nums">
               Rang <strong className="text-primary">#{myRank ?? '—'}</strong> · Nv.{me?.level ?? 1} ·{' '}

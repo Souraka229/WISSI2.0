@@ -30,6 +30,7 @@ function LoginForm() {
         password,
       })
       if (error) throw error
+      await new Promise((resolve) => setTimeout(resolve, 100))
       const redirectTo = safeAuthRedirectPath(
         searchParams.get('redirect'),
         '/dashboard',
@@ -73,9 +74,17 @@ function LoginForm() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-semibold text-foreground">
-              Mot de passe
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="password" className="text-sm font-semibold text-foreground">
+                Mot de passe
+              </label>
+              <Link
+                href="/auth/reset-password"
+                className="text-xs text-muted-foreground underline-offset-4 hover:text-violet-600 hover:underline dark:hover:text-violet-400"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"

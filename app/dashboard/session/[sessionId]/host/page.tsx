@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -34,7 +34,8 @@ const STATUS_FR: Record<string, string> = {
 export default function HostSessionPage() {
   const params = useParams()
   const sessionId = params.sessionId as string
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
 
   const [session, setSession] = useState<Record<string, unknown> | null>(null)
   const [quizTitle, setQuizTitle] = useState('')
@@ -50,6 +51,14 @@ export default function HostSessionPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successHint, setSuccessHint] = useState<string | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<
+    'connecting' | 'connected' | 'error'
+  >('connecting')
+
+  const showHint = useCallback((msg: string) => {
+    setSuccessHint(msg)
+    window.setTimeout(() => setSuccessHint(null), 3000)
+  }, [])
 
   const loadLeaderboard = useCallback(async () => {
     try {
@@ -117,20 +126,28 @@ export default function HostSessionPage() {
       }
     }
 
-    void init()
-
-    const liveCh = supabase
-      .channel(`host-live-${sessionId}`)
+    const sessionCh = supabase
+      .channel(`host-${sessionId}`, {
+        config: { broadcast: { ack: true } },
+      })
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'sessions',
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          setSession(payload.new as Record<string, unknown>)
+          if (cancelled) return
+          const newSession = payload.new as Record<string, unknown>
+          setSession((prev) => {
+            if (!prev || sessionLiveFieldsChanged(prev, newSession)) {
+              return newSession
+            }
+            return prev
+          })
+          scheduleLeaderboard()
         },
       )
       .on(
@@ -142,10 +159,21 @@ export default function HostSessionPage() {
           filter: `session_id=eq.${sessionId}`,
         },
         () => {
-          scheduleLeaderboard()
+          if (!cancelled) scheduleLeaderboard()
         },
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[HOST] ✅ Realtime connecté')
+          if (!cancelled) setRealtimeStatus('connected')
+        }
+        if (err) console.error('[HOST] ❌ Realtime erreur', err)
+        if (err || status === 'CHANNEL_ERROR') {
+          if (!cancelled) setRealtimeStatus('error')
+        }
+      })
+
+    void init()
 
     const pollId = window.setInterval(async () => {
       if (cancelled) return
@@ -163,9 +191,9 @@ export default function HostSessionPage() {
       cancelled = true
       if (leaderboardDebounce) clearTimeout(leaderboardDebounce)
       window.clearInterval(pollId)
-      void supabase.removeChannel(liveCh)
+      void supabase.removeChannel(sessionCh)
     }
-  }, [sessionId, supabase, loadLeaderboard])
+  }, [sessionId, loadLeaderboard])
 
   useEffect(() => {
     if (session?.status === 'results') {
@@ -190,8 +218,8 @@ export default function HostSessionPage() {
         next_question: 'Étape suivante envoyée.',
         end: 'Session terminée.',
       }
-      setSuccessHint(hints[action] ?? null)
-      window.setTimeout(() => setSuccessHint(null), 4500)
+      const h = hints[action]
+      if (h) showHint(h)
     } catch (e) {
       console.error(e)
       setError('Échec de la commande — réessayez ou ouvrez la console.')
@@ -240,6 +268,30 @@ export default function HostSessionPage() {
             <p className="truncate text-xs text-muted-foreground">
               {quizTitle} · {mode}
             </p>
+          </div>
+          <div
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium ${
+              realtimeStatus === 'connected'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                : realtimeStatus === 'error'
+                  ? 'bg-destructive/15 text-destructive'
+                  : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            <div
+              className={`h-1.5 w-1.5 rounded-full ${
+                realtimeStatus === 'connected'
+                  ? 'animate-pulse bg-emerald-500'
+                  : realtimeStatus === 'error'
+                    ? 'bg-destructive'
+                    : 'bg-muted-foreground'
+              }`}
+            />
+            {realtimeStatus === 'connected'
+              ? 'Live'
+              : realtimeStatus === 'error'
+                ? 'Déconnecté'
+                : 'Connexion…'}
           </div>
           <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium sm:flex">
             <Users className="h-3.5 w-3.5" />
@@ -336,6 +388,29 @@ export default function HostSessionPage() {
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}
               Démarrer la partie
+            </Button>
+          </div>
+        )}
+
+        {status === 'active' && (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="secondary"
+              className="h-12 flex-1 gap-2 font-semibold"
+              disabled={busy}
+              onClick={() => void run('show_leaderboard')}
+            >
+              <Trophy className="h-4 w-4" />
+              Classement intermédiaire
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12 flex-1 gap-2"
+              disabled={busy}
+              onClick={() => void run('next_question')}
+            >
+              <SkipForward className="h-4 w-4" />
+              Question suivante
             </Button>
           </div>
         )}

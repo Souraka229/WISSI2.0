@@ -7,6 +7,7 @@ import {
   getQuizzes,
   startSession,
   type GameMode,
+  type SessionScoringMode,
 } from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
 import { JoinQrCode } from '@/components/join-qr-code'
@@ -21,10 +22,12 @@ export default function LaunchPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLaunching, setIsLaunching] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedJoinUrl, setCopiedJoinUrl] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
   const [gameMode, setGameMode] = useState<GameMode>('challenge_free')
   const [secondaryQuizId, setSecondaryQuizId] = useState<string>('')
   const [otherQuizzes, setOtherQuizzes] = useState<{ id: string; title: string }[]>([])
+  const [scoringMode, setScoringMode] = useState<SessionScoringMode>('classic')
 
   useEffect(() => {
     const load = async () => {
@@ -61,6 +64,7 @@ export default function LaunchPage() {
         gameMode,
         secondaryQuizId:
           gameMode === 'prof_dual' ? secondaryQuizId : null,
+        scoringMode,
       })
       if (!newSession?.id) {
         throw new Error('Réponse serveur invalide')
@@ -78,10 +82,22 @@ export default function LaunchPage() {
 
   const copyToClipboard = () => {
     if (session?.pin_code) {
-      navigator.clipboard.writeText(session.pin_code)
+      void navigator.clipboard.writeText(String(session.pin_code))
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      window.setTimeout(() => setCopied(false), 2000)
     }
+  }
+
+  const joinUrl =
+    typeof window !== 'undefined' && session?.pin_code
+      ? `${window.location.origin}/join?pin=${encodeURIComponent(String(session.pin_code))}`
+      : ''
+
+  const copyJoinInvitationUrl = () => {
+    if (!joinUrl) return
+    void navigator.clipboard.writeText(joinUrl)
+    setCopiedJoinUrl(true)
+    window.setTimeout(() => setCopiedJoinUrl(false), 2500)
   }
 
   if (isLoading) {
@@ -178,6 +194,22 @@ export default function LaunchPage() {
                   {launchError}
                 </div>
               )}
+
+              <div className="mb-6 space-y-3 rounded-xl border border-border bg-muted/30 p-6 text-left">
+                <p className="text-sm font-semibold text-foreground">Mode de scoring</p>
+                <p className="text-xs text-muted-foreground">
+                  Définit comment les points sont attribués pendant la session (stocké sur la session).
+                </p>
+                <select
+                  value={scoringMode}
+                  onChange={(e) => setScoringMode(e.target.value as SessionScoringMode)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
+                >
+                  <option value="classic">Classique — points pleins si bonne réponse</option>
+                  <option value="precision">Précision — met l’accent sur l’exactitude</option>
+                  <option value="speed">Vitesse — favorise les réponses les plus rapides</option>
+                </select>
+              </div>
 
               <div className="mb-8 space-y-4 rounded-xl border border-border bg-muted/30 p-6 text-left">
                 <p className="text-sm font-semibold text-foreground">Type de partie</p>
@@ -295,16 +327,33 @@ export default function LaunchPage() {
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm mb-8 text-center text-muted-foreground">
-                <p>
-                  Lien direct :{' '}
-                  <Link
-                    href={`/join?pin=${encodeURIComponent(String(session.pin_code))}`}
-                    className="font-mono text-foreground underline-offset-4 hover:underline"
+              <div className="mb-8 space-y-3 text-left text-sm text-muted-foreground">
+                <p className="text-center font-medium text-foreground">Lien d’invitation complet</p>
+                <div className="rounded-lg border border-border bg-background/80 px-3 py-2 font-mono text-xs break-all text-foreground sm:text-sm">
+                  {typeof window !== 'undefined'
+                    ? `${window.location.origin}/join?pin=${encodeURIComponent(String(session.pin_code))}`
+                    : `…/join?pin=${session.pin_code}`}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="gap-2 font-semibold"
+                    onClick={copyJoinInvitationUrl}
                   >
-                    /join?pin={session.pin_code}
-                  </Link>
-                </p>
+                    <Copy className="h-4 w-4" />
+                    {copiedJoinUrl ? 'Lien copié !' : 'Copier le lien d’invitation'}
+                  </Button>
+                  <Button type="button" variant="outline" className="gap-2" asChild>
+                    <Link
+                      href={`/join?pin=${encodeURIComponent(String(session.pin_code))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Ouvrir /join
+                    </Link>
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-3">
