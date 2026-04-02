@@ -446,17 +446,17 @@ export default function HostSessionPage() {
             : 'border-border bg-muted/30'
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20 pb-[env(safe-area-inset-bottom,0px)]">
-      <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" asChild>
+    <div className="min-h-[100dvh] bg-gradient-to-b from-violet-500/[0.06] via-background to-muted/25 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/95 shadow-sm backdrop-blur-lg pt-[env(safe-area-inset-top,0px)]">
+        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 px-3 py-3 sm:flex-nowrap sm:gap-3 sm:px-5">
+          <Button variant="ghost" size="icon" className="shrink-0 touch-manipulation" asChild>
             <Link href="/dashboard" aria-label="Retour">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold">Pupitre animateur</h1>
-            <p className="truncate text-xs text-muted-foreground">
+          <div className="min-w-0 flex-1 basis-[min(100%,12rem)] sm:basis-auto">
+            <h1 className="truncate text-base font-bold sm:text-lg">Pupitre animateur</h1>
+            <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
               {quizTitle} · {mode}
             </p>
           </div>
@@ -504,18 +504,18 @@ export default function HostSessionPage() {
         )}
 
         <section
-          className={`rounded-2xl border-2 p-5 shadow-sm transition-colors ${statusTone}`}
+          className={`rounded-2xl border-2 p-4 shadow-md transition-colors sm:rounded-3xl sm:p-6 ${statusTone}`}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">
                 État en direct
               </p>
-              <p className="mt-1 text-2xl font-bold">{statusFr}</p>
+              <p className="mt-1 text-xl font-black sm:text-2xl">{statusFr}</p>
               <p className="mt-2 text-sm opacity-90">
                 Question <span className="font-mono font-bold">{Math.min(idx + 1, questionCount)}</span>{' '}
                 / {questionCount || '—'} · PIN{' '}
-                <span className="font-mono font-bold">{String(session.pin_code)}</span>
+                <span className="font-mono font-bold tracking-wider">{String(session.pin_code)}</span>
               </p>
             </div>
             <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs font-medium text-foreground sm:hidden">
@@ -653,7 +653,7 @@ export default function HostSessionPage() {
               Quand assez de monde a rejoint, lancez : les téléphones passent sur la 1ʳᵉ question.
             </p>
             <Button
-              className="h-14 w-full gap-2 text-base shadow-lg shadow-primary/20"
+              className="h-14 w-full touch-manipulation gap-2 text-base font-bold shadow-lg shadow-primary/25 sm:h-16 sm:text-lg"
               disabled={busy || questionCount === 0}
               onClick={() => void run('start')}
             >

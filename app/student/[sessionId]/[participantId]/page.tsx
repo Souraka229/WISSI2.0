@@ -502,16 +502,16 @@ export default function StudentPlayerPage() {
 
   const liveRealtimeBadge = (
     <div
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide ${
         realtimeStatus === 'connected'
-          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+          ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300'
           : realtimeStatus === 'error'
             ? 'bg-destructive/15 text-destructive'
             : 'bg-muted text-muted-foreground'
       }`}
     >
       <span
-        className={`h-1.5 w-1.5 rounded-full ${
+        className={`h-2 w-2 rounded-full ${
           realtimeStatus === 'connected'
             ? 'animate-pulse bg-emerald-500'
             : realtimeStatus === 'error'
@@ -522,28 +522,33 @@ export default function StudentPlayerPage() {
       {realtimeStatus === 'connected'
         ? 'Live'
         : realtimeStatus === 'error'
-          ? 'Déconnecté'
+          ? 'Hors ligne'
           : 'Connexion…'}
     </div>
   )
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-gradient-to-b from-primary/5 to-background px-8">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-sm font-medium text-muted-foreground">Connexion à la partie…</p>
+      <div className="live-play-bg flex min-h-[100dvh] flex-col items-center justify-center gap-6 px-6 pt-[env(safe-area-inset-top,0px)]">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="relative">
+            <div className="absolute inset-0 animate-ping rounded-full bg-primary/20 blur-xl" aria-hidden />
+            <Loader2 className="relative h-14 w-14 animate-spin text-primary" />
+          </div>
+          <p className="text-base font-semibold text-foreground">Connexion à la partie…</p>
+          <p className="max-w-xs text-sm text-muted-foreground">Quelques secondes, on prépare ton écran de jeu.</p>
         </div>
-        <div className="h-2 w-48 max-w-full overflow-hidden rounded-full live-skeleton" />
+        <div className="h-2 w-56 max-w-full overflow-hidden rounded-full live-skeleton" />
       </div>
     )
   }
 
   if (!session) {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 p-6">
-        <p className="text-muted-foreground">Session introuvable</p>
-        <Button asChild variant="outline">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 p-6 text-center">
+        <p className="text-lg font-semibold text-foreground">Session introuvable</p>
+        <p className="max-w-sm text-sm text-muted-foreground">Vérifie le lien ou le code PIN avec ton enseignant.</p>
+        <Button asChild size="lg" variant="outline" className="min-h-12 min-w-[200px] touch-manipulation">
           <Link href="/join">Rejoindre une autre session</Link>
         </Button>
       </div>
@@ -552,23 +557,25 @@ export default function StudentPlayerPage() {
 
   if (status === 'finished') {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-8 bg-gradient-to-b from-amber-500/15 via-background to-violet-500/10 p-6 text-center animate-in fade-in zoom-in-95 duration-500">
+      <div className="relative flex min-h-[100dvh] flex-col items-center justify-center gap-8 overflow-hidden bg-gradient-to-b from-amber-500/20 via-background to-violet-600/15 px-5 py-10 text-center animate-in fade-in zoom-in-95 duration-500 sm:px-8 live-safe-bottom">
+        <div className="pointer-events-none absolute -top-20 left-1/2 h-64 w-[120%] -translate-x-1/2 rounded-full bg-amber-400/25 blur-3xl dark:bg-amber-500/20" aria-hidden />
         <div className="relative">
-          <div className="absolute inset-0 blur-2xl bg-amber-400/30 rounded-full scale-150" aria-hidden />
-          <Trophy className="relative h-20 w-20 text-amber-500 drop-shadow-lg" />
+          <div className="absolute inset-0 scale-150 rounded-full bg-amber-400/35 blur-2xl dark:bg-amber-500/25" aria-hidden />
+          <Trophy className="relative mx-auto h-24 w-24 text-amber-500 drop-shadow-lg sm:h-28 sm:w-28" />
         </div>
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">Bravo !</h1>
-          <p className="mt-3 text-lg text-muted-foreground">
-            <span className="font-semibold text-foreground">{me?.nickname}</span> —{' '}
-            <span className="tabular-nums font-bold text-primary">{me?.score ?? 0} pts</span>
-            <span className="text-muted-foreground"> · niveau {me?.level ?? 1}</span>
+        <div className="relative max-w-md space-y-2">
+          <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Bravo !</h1>
+          <p className="text-lg text-muted-foreground sm:text-xl">
+            <span className="font-bold text-foreground">{me?.nickname}</span>
+            <span className="mx-1 text-muted-foreground">·</span>
+            <span className="tabular-nums font-black text-primary">{me?.score ?? 0} pts</span>
+            <span className="text-muted-foreground"> · nv. {me?.level ?? 1}</span>
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Rang final #{myRank ?? '—'} dans cette session
+          <p className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-950 dark:text-amber-100">
+            Rang final <span className="tabular-nums font-black">#{myRank ?? '—'}</span> sur cette session
           </p>
         </div>
-        <Button asChild size="lg" className="min-w-[200px]">
+        <Button asChild size="lg" className="relative min-h-14 min-w-[min(100%,280px)] touch-manipulation text-base font-bold shadow-lg">
           <Link href="/join">Rejouer une autre partie</Link>
         </Button>
       </div>
@@ -577,38 +584,63 @@ export default function StudentPlayerPage() {
 
   if (status === 'waiting') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-b from-primary/15 via-background to-violet-500/5 px-4 py-8">
-        <div className="mx-auto max-w-md space-y-8 pt-10 text-center animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/90 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="font-medium">{onlineCount} connecté(s)</span>
+      <div className="live-lobby-bg relative min-h-[100dvh] overflow-hidden px-4 pb-10 pt-[max(1.5rem,env(safe-area-inset-top,0px))] sm:px-6">
+        <div
+          className="live-lobby-orb pointer-events-none absolute -right-24 top-20 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl dark:bg-fuchsia-400/15"
+          aria-hidden
+        />
+        <div
+          className="live-lobby-orb pointer-events-none absolute -left-32 bottom-32 h-80 w-80 rounded-full bg-violet-500/20 blur-3xl [animation-delay:-5s] dark:bg-violet-400/15"
+          aria-hidden
+        />
+        <div className="relative mx-auto flex max-w-lg flex-col space-y-8 text-center sm:max-w-xl animate-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
+            <div className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-card/80 px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inline-flex sm:py-2.5">
+              <Users className="h-5 w-5 shrink-0 text-primary" />
+              <span className="font-semibold">
+                <span className="tabular-nums">{onlineCount}</span> en ligne
+              </span>
             </div>
-            {liveRealtimeBadge}
+            <div className="flex justify-center sm:justify-start">{liveRealtimeBadge}</div>
           </div>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight">Salle d’attente</h1>
-            <p className="mt-3 text-muted-foreground">
-              Salut <strong className="text-foreground">{me?.nickname}</strong> — le prof lance la partie
-              quand tout le monde est prêt.
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary/80">Presque prêt</p>
+            <h1 className="text-4xl font-black leading-[1.1] tracking-tight sm:text-5xl">Salle d’attente</h1>
+            <p className="mx-auto max-w-sm text-base leading-relaxed text-muted-foreground sm:max-w-md sm:text-lg">
+              Salut <span className="font-bold text-foreground">{me?.nickname}</span>
+              <span className="hidden sm:inline"> — </span>
+              <span className="block sm:inline">dès que l’animateur lance, les questions s’affichent ici.</span>
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-6 text-left shadow-lg ring-1 ring-primary/5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Votre profil
-            </p>
-            <p className="mt-3 text-lg font-bold tabular-nums">
-              Rang #{myRank ?? '—'} · Nv. {me?.level ?? 1} · {me?.score ?? 0} pts
-            </p>
+          <div className="rounded-3xl border border-white/20 bg-card/90 p-6 text-left shadow-2xl ring-1 ring-primary/10 backdrop-blur-md dark:border-white/10">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ton classement</p>
+            <div className="mt-4 grid grid-cols-1 gap-3 text-center min-[400px]:grid-cols-3 sm:gap-4 min-[400px]:divide-x min-[400px]:divide-border">
+              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Rang</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-primary sm:text-3xl">#{myRank ?? '—'}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Niveau</p>
+                <p className="mt-1 text-2xl font-black tabular-nums sm:text-3xl">{me?.level ?? 1}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Points</p>
+                <p className="mt-1 text-2xl font-black tabular-nums sm:text-3xl">{me?.score ?? 0}</p>
+              </div>
+            </div>
             {typeof me?.streak === 'number' && me.streak > 0 && (
-              <p className="mt-2 flex items-center gap-1 text-sm font-medium text-orange-600 dark:text-orange-400">
-                <Flame className="h-4 w-4" /> Série : {me.streak} bonne(s) réponse(s) d’affilée
+              <p className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-orange-500/15 py-2.5 text-sm font-bold text-orange-700 dark:text-orange-300">
+                <Flame className="h-5 w-5 shrink-0" />
+                Série : {me.streak} bonne(s) réponse(s)
               </p>
             )}
           </div>
-          <p className="text-sm font-medium text-muted-foreground live-waiting-pulse">
-            En attente du lancement…
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex h-1.5 w-32 overflow-hidden rounded-full bg-muted">
+              <div className="live-waiting-pulse h-full w-1/2 rounded-full bg-primary" />
+            </div>
+            <p className="text-sm font-semibold text-muted-foreground">En attente du lancement…</p>
+          </div>
         </div>
       </div>
     )
@@ -616,28 +648,33 @@ export default function StudentPlayerPage() {
 
   if (status === 'results') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-b from-violet-500/10 via-background to-background px-4 pb-28 pt-6 animate-in zoom-in-95 duration-300">
-        <header className="mx-auto mb-6 flex max-w-lg flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 shrink-0 text-violet-500" />
+      <div className="live-podium-bg min-h-[100dvh] px-3 pb-32 pt-[max(0.75rem,env(safe-area-inset-top,0px))] animate-in zoom-in-95 duration-300 sm:px-5 sm:pb-36 sm:pt-4">
+        <header className="mx-auto mb-5 flex max-w-lg flex-col gap-4 sm:mb-8 sm:max-w-2xl sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-700 dark:text-violet-300">
+              <Sparkles className="h-6 w-6" />
+            </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Temps réel</p>
-              <p className="text-lg font-black">TOP 5</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                ↑ ↓ = évolution du rang après la question
+              <p className="text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Classement</p>
+              <p className="text-2xl font-black tracking-tight sm:text-3xl">Top 5</p>
+              <p className="mt-1 max-w-[240px] text-xs leading-snug text-muted-foreground sm:max-w-none">
+                Flèches : évolution de ton rang après la question.
               </p>
             </div>
           </div>
-          {liveRealtimeBadge}
-          <div className="text-right text-sm">
-            <p className="font-semibold text-primary">Vous</p>
-            <p className="tabular-nums">
-              #{myRank ?? '—'} · Nv.{me?.level ?? 1} · {me?.score ?? 0} pts
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+            {liveRealtimeBadge}
+            <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-right sm:min-w-[9rem]">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-primary">Toi</p>
+              <p className="text-sm font-bold tabular-nums sm:text-base">
+                #{myRank ?? '—'} · Nv.{me?.level ?? 1}
+              </p>
+              <p className="text-xs font-semibold tabular-nums text-muted-foreground">{me?.score ?? 0} pts</p>
+            </div>
           </div>
         </header>
 
-        <ol className="mx-auto max-w-lg space-y-3">
+        <ol className="mx-auto max-w-lg space-y-2.5 sm:max-w-2xl sm:space-y-3">
           {leaderboard.map((row, i) => {
             const medal =
               row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : null
@@ -658,20 +695,20 @@ export default function StudentPlayerPage() {
             return (
               <li
                 key={row.id ?? `${row.rank}-${row.nickname}`}
-                className={`flex animate-in fade-in slide-in-from-left-2 items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3 duration-300 ${base} ${
-                  isMe ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]' : ''
+                className={`flex animate-in fade-in slide-in-from-left-2 flex-col gap-3 rounded-2xl border-2 px-4 py-3.5 duration-300 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between sm:rounded-3xl sm:px-5 sm:py-4 ${base} ${
+                  isMe ? 'ring-2 ring-primary ring-offset-2 ring-offset-background sm:scale-[1.02]' : ''
                 }`}
                 style={{ animationDelay: `${i * 70}ms` }}
               >
                 <span className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center text-lg font-bold">
-                    {medal ?? <span className="text-sm text-muted-foreground">#{row.rank}</span>}
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center text-xl font-bold sm:h-12 sm:w-12 sm:text-2xl">
+                    {medal ?? <span className="text-sm font-black text-muted-foreground">#{row.rank}</span>}
                   </span>
-                  <span className={`min-w-0 truncate font-medium ${isMe ? 'text-primary' : ''}`}>
+                  <span className={`min-w-0 truncate text-base font-semibold sm:text-lg ${isMe ? 'text-primary' : ''}`}>
                     {row.nickname}
                   </span>
                 </span>
-                <span className="flex shrink-0 items-center gap-2">
+                <span className="flex shrink-0 items-center justify-end gap-2 min-[400px]:justify-start">
                   {prevRank !== undefined && (
                     <span
                       className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
@@ -698,7 +735,7 @@ export default function StudentPlayerPage() {
                       )}
                     </span>
                   )}
-                  <span className="text-right text-sm font-bold tabular-nums">
+                  <span className="text-right text-sm font-bold tabular-nums sm:text-base">
                     {row.score} pts · Nv.{row.level}
                   </span>
                 </span>
@@ -707,11 +744,11 @@ export default function StudentPlayerPage() {
           })}
         </ol>
 
-        <div className="mx-auto mt-10 max-w-lg rounded-xl border border-dashed border-primary/25 bg-primary/5 p-4 text-center text-sm text-muted-foreground">
-          La suite est lancée par l’animateur ou en défilement automatique.
+        <div className="mx-auto mt-8 max-w-lg rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-center text-sm leading-relaxed text-muted-foreground sm:mt-10 sm:max-w-2xl sm:p-5">
+          La suite est lancée par l’animateur (ou automatiquement si activé).
         </div>
 
-        <div className="pointer-events-none fixed bottom-4 left-0 right-0 flex flex-wrap justify-center gap-2 px-4">
+        <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-0 right-0 flex flex-wrap justify-center gap-2 px-4">
           {recentReactions.slice(-8).map((e, i) => (
             <span
               key={`${e}-${i}`}
@@ -745,17 +782,18 @@ export default function StudentPlayerPage() {
     const timeRatio = budgetSeconds > 0 ? timeLeft / budgetSeconds : 0
 
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-b from-emerald-500/5 via-background to-muted/25 pb-36">
-        <header className="sticky top-0 z-40 border-b border-border bg-card/95 shadow-sm backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
-          <div className="mx-auto max-w-lg px-4 pt-3">
-            <div className="flex items-center justify-between gap-2">
+      <div className="live-play-bg relative min-h-[100dvh] pb-[max(6rem,env(safe-area-inset-bottom,0px)+5rem)]">
+        <header className="sticky top-0 z-40 border-b border-border/80 bg-card/90 shadow-md backdrop-blur-lg pt-[env(safe-area-inset-top,0px)]">
+          <div className="mx-auto w-full max-w-lg px-3 pt-3 sm:max-w-2xl sm:px-5 sm:pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Question {qIndex + 1} / {questions.length}
+                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                  Question <span className="tabular-nums">{qIndex + 1}</span> /{' '}
+                  <span className="tabular-nums">{questions.length}</span>
                 </p>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted sm:h-2">
                   <div
-                    className="h-full rounded-full bg-primary/40 transition-all duration-700 ease-out"
+                    className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-700 ease-out"
                     style={{
                       width: `${((qIndex + 1) / Math.max(questions.length, 1)) * 100}%`,
                     }}
@@ -763,57 +801,61 @@ export default function StudentPlayerPage() {
                 </div>
               </div>
               <div
-                className={`flex shrink-0 items-center gap-1 rounded-xl border-2 px-3 py-1.5 tabular-nums ${
+                className={`flex shrink-0 items-center justify-center gap-2 self-end rounded-2xl border-2 px-4 py-2.5 tabular-nums shadow-sm sm:self-center sm:px-5 sm:py-3 ${
                   timeLeft <= 5
-                    ? 'border-destructive/60 bg-destructive/10 text-destructive'
-                    : 'border-border bg-muted/50 text-foreground'
+                    ? 'border-destructive/70 bg-destructive/15 text-destructive'
+                    : 'border-border bg-muted/60 text-foreground'
                 }`}
               >
-                <Clock className="h-4 w-4 opacity-70" />
-                <span className={`text-xl font-black ${timeLeft <= 5 ? 'animate-pulse' : ''}`}>
+                <Clock className="h-5 w-5 opacity-80 sm:h-6 sm:w-6" />
+                <span className={`text-2xl font-black sm:text-3xl ${timeLeft <= 5 ? 'animate-pulse' : ''}`}>
                   {timeLeft}s
                 </span>
               </div>
             </div>
-            <div
-              className="mt-2 h-1 overflow-hidden rounded-full bg-muted/80"
-              aria-hidden
-            >
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted/90 sm:mt-3.5" aria-hidden>
               <div
                 className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
-                  timeLeft <= 5 ? 'bg-destructive' : 'bg-emerald-500'
+                  timeLeft <= 5 ? 'bg-destructive' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
                 }`}
                 style={{ width: `${Math.max(0, Math.min(100, timeRatio * 100))}%` }}
               />
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 px-4 py-2.5 text-xs">
+          <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-3 text-xs sm:mx-auto sm:max-w-2xl sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-5 sm:py-3 sm:text-sm">
             <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              <Users className="mr-1 inline h-3 w-3" />
-              {onlineCount} en ligne
+              <Users className="h-4 w-4 shrink-0 text-primary/80" />
+              <span className="font-medium">
+                <span className="tabular-nums">{onlineCount}</span> en ligne
+              </span>
               {liveRealtimeBadge}
             </span>
-            <span className="tabular-nums">
-              Rang <strong className="text-primary">#{myRank ?? '—'}</strong> · Nv.{me?.level ?? 1} ·{' '}
-              {me?.score ?? 0} pts
-            </span>
-            {typeof me?.streak === 'number' && me.streak > 0 && (
-              <span className="flex items-center gap-0.5 font-semibold text-orange-600 dark:text-orange-400">
-                <Flame className="h-3.5 w-3.5" />
-                {me.streak}
+            <span className="flex flex-wrap items-center gap-2 font-medium tabular-nums text-foreground">
+              <span>
+                Rang <strong className="text-primary">#{myRank ?? '—'}</strong>
               </span>
-            )}
+              <span className="text-muted-foreground">·</span>
+              <span>Nv.{me?.level ?? 1}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>{me?.score ?? 0} pts</span>
+              {typeof me?.streak === 'number' && me.streak > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 font-bold text-orange-700 dark:text-orange-300">
+                  <Flame className="h-3.5 w-3.5" />
+                  {me.streak}
+                </span>
+              )}
+            </span>
           </div>
         </header>
 
-        <main className="mx-auto max-w-lg px-4 py-6">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-lg ring-1 ring-black/5 dark:ring-white/10 animate-in fade-in slide-in-from-bottom-3 duration-300">
-            <h2 className="text-balance text-xl font-bold leading-snug sm:text-2xl">
+        <main className="mx-auto w-full max-w-lg px-3 py-5 sm:max-w-2xl sm:px-6 sm:py-8">
+          <div className="rounded-3xl border border-border/80 bg-card/95 p-4 shadow-2xl ring-1 ring-black/[0.04] animate-in fade-in slide-in-from-bottom-3 duration-300 dark:bg-card dark:ring-white/[0.06] sm:p-6 md:p-8">
+            <h2 className="text-balance text-lg font-bold leading-snug text-foreground sm:text-xl md:text-2xl">
               {currentQuestion.question_text}
             </h2>
 
             {currentQuestion.question_type === 'mcq' && Array.isArray(currentQuestion.options) && (
-              <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="mt-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4">
                 {currentQuestion.options.map((option: string, idx: number) => {
                   const nOpts = currentQuestion.options!.length
                   const isSel = selectedAnswer === String(idx)
@@ -827,16 +869,16 @@ export default function StudentPlayerPage() {
                       onClick={() =>
                         canInteract && void submitAnswerNow(false, String(idx))
                       }
-                      className={`flex min-h-[100px] flex-col justify-center px-4 py-4 text-left ${liveMcqTileClass(idx, {
+                      className={`flex min-h-[5.25rem] flex-col justify-center px-4 py-4 text-left sm:min-h-[6.25rem] sm:px-5 sm:py-5 ${liveMcqTileClass(idx, {
                         isSelected: isSel,
                         answered,
                         canInteract,
-                      })} ${spanFull ? 'col-span-2' : ''}`}
+                      })} ${spanFull ? 'min-[420px]:col-span-2' : ''}`}
                     >
-                      <span className="text-[10px] font-black uppercase tracking-widest opacity-85">
+                      <span className="text-[11px] font-black uppercase tracking-widest opacity-90 sm:text-xs">
                         {String.fromCharCode(65 + idx)}
                       </span>
-                      <p className="mt-1 text-base font-semibold leading-snug">{option}</p>
+                      <p className="mt-1.5 text-base font-bold leading-snug sm:text-lg">{option}</p>
                     </button>
                   )
                 })}
@@ -844,7 +886,7 @@ export default function StudentPlayerPage() {
             )}
 
             {currentQuestion.question_type === 'true_false' && (
-              <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="mt-6 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:gap-4">
                 {['Vrai', 'Faux'].map((label, idx) => {
                   const isSel = selectedAnswer === String(idx)
                   const canInteract = !answered && timeLeft > 0
@@ -856,7 +898,7 @@ export default function StudentPlayerPage() {
                       onClick={() =>
                         canInteract && void submitAnswerNow(false, String(idx))
                       }
-                      className={`flex min-h-[120px] items-center justify-center px-4 py-6 text-center text-xl font-black ${liveMcqTileClass(idx, {
+                      className={`flex min-h-[5.5rem] items-center justify-center px-4 py-5 text-center text-2xl font-black sm:min-h-[7rem] sm:text-3xl ${liveMcqTileClass(idx, {
                         isSelected: isSel,
                         answered,
                         canInteract,
@@ -869,11 +911,10 @@ export default function StudentPlayerPage() {
               </div>
             )}
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-4 sm:mt-8">
               {!answered ? (
-                <p className="text-center text-xs text-muted-foreground">
-                  Touchez une réponse colorée : elle est envoyée tout de suite (un seul choix par
-                  question).
+                <p className="text-center text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  Touche une couleur pour répondre — envoi immédiat, un seul choix.
                 </p>
               ) : (
                 <div className="space-y-3">

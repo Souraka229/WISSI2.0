@@ -178,3 +178,71 @@
   background-size: 200% 100%;
   animation: live-shimmer 1.2s ease-in-out infinite;
 }
+
+@keyframes live-bg-drift {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.08) translate(2%, -1%);
+  }
+}
+
+/* Fond salle d’attente live */
+.live-lobby-bg {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, oklch(0.72 0.18 280 / 0.35), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 100% 60%, oklch(0.7 0.2 330 / 0.2), transparent 45%),
+    radial-gradient(ellipse 80% 50% at 0% 80%, oklch(0.75 0.14 200 / 0.18), transparent 40%),
+    var(--background);
+}
+
+.dark .live-lobby-bg {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, oklch(0.45 0.2 280 / 0.4), transparent 50%),
+    radial-gradient(ellipse 90% 60% at 100% 60%, oklch(0.4 0.18 330 / 0.25), transparent 45%),
+    radial-gradient(ellipse 80% 50% at 0% 80%, oklch(0.42 0.12 200 / 0.2), transparent 40%),
+    var(--background);
+}
+
+.live-lobby-orb {
+  animation: live-bg-drift 14s ease-in-out infinite;
+}
+
+/* Phase question : ambiance jeu */
+.live-play-bg {
+  background:
+    radial-gradient(ellipse 100% 70% at 50% 0%, oklch(0.72 0.16 160 / 0.22), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, oklch(0.65 0.14 280 / 0.12), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, oklch(0.68 0.12 45 / 0.1), transparent 50%),
+    var(--background);
+}
+
+.dark .live-play-bg {
+  background:
+    radial-gradient(ellipse 100% 70% at 50% 0%, oklch(0.4 0.14 160 / 0.35), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, oklch(0.38 0.12 280 / 0.2), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, oklch(0.42 0.1 45 / 0.15), transparent 50%),
+    var(--background);
+}
+
+/* Classement live */
+.live-podium-bg {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, oklch(0.62 0.2 290 / 0.2), transparent 50%),
+    var(--background);
+}
+
+.dark .live-podium-bg {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, oklch(0.42 0.18 290 / 0.35), transparent 50%),
+    var(--background);
+}
+
+/* Safe area bas (iPhone) */
+.live-safe-bottom {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+}

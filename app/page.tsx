@@ -423,16 +423,16 @@ export default function LandingPage() {
               Témoignages
             </p>
             <h2 className="text-4xl font-bold tracking-tight">
-              Ils utilisent SCITI-Quiz au quotidien
+              Enseignants et étudiants témoignent
             </h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             <TestimonialCard
-              quote="SCITI-Quiz a complètement transformé mes cours de mathématiques. Les étudiants sont enfin engagés et attentifs."
-              author="Marie Dupont"
-              role="Professeure de Mathématiques"
-              institution="Lycée Henri IV, Paris"
+              quote="J'aime bien utiliser SCITI-Quiz parce qu'il permet d'apprendre en s'amusant, en se challengeant — et c'est top !"
+              author="OBINE Tobi Roderick"
+              role="Étudiant"
+              institution="Seme City"
             />
             <TestimonialCard
               quote="L'export PDF des résultats me fait gagner des heures chaque semaine. Je peux enfin me concentrer sur l'enseignement."
