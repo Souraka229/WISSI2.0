@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 
 export async function updateProfileDisplayName(displayName: string) {
   const supabase = await createClient()
@@ -30,4 +31,7 @@ export async function updateProfileDisplayName(displayName: string) {
     .eq('id', user.id)
 
   if (error) throw error
+
+  revalidatePath('/dashboard/profile')
+  revalidatePath('/dashboard')
 }
