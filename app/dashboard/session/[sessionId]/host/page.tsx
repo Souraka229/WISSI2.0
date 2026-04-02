@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { hostControlSession, getSessionLeaderboard } from '@/app/actions/quiz'
+import {
+  hostControlSession,
+  getSessionLeaderboard,
+  getHostQuestionLiveOverview,
+  type HostControlAction,
+  type HostQuestionLiveRow,
+} from '@/app/actions/quiz'
 import {
   fetchMergedSessionQuestions,
   sessionLiveFieldsChanged,
@@ -21,6 +27,9 @@ import {
   Square,
   HelpCircle,
   Sparkles,
+  Timer,
+  Minus,
+  ClipboardList,
 } from 'lucide-react'
 
 const STATUS_FR: Record<string, string> = {
@@ -54,6 +63,33 @@ export default function HostSessionPage() {
   const [realtimeStatus, setRealtimeStatus] = useState<
     'connecting' | 'connected' | 'error'
   >('connecting')
+  const [questionOverview, setQuestionOverview] = useState<
+    HostQuestionLiveRow[] | null
+  >(null)
+
+  const sessionRef = useRef<Record<string, unknown> | null>(null)
+  const questionsRef = useRef<
+    {
+      id: string
+      question_text: string
+      question_type?: string
+      correct_answer?: string
+      options?: string[]
+    }[]
+  >([])
+  sessionRef.current = session
+  questionsRef.current = questions
+
+  const refreshQuestionOverview = useCallback(async () => {
+    const s = sessionRef.current
+    const qs = questionsRef.current
+    if (String(s?.status ?? '') !== 'question') return
+    const qi = Number(s?.current_question_index ?? 0)
+    const q = qs[qi]
+    if (!q?.id) return
+    const res = await getHostQuestionLiveOverview(sessionId, q.id)
+    if (res.ok) setQuestionOverview(res.rows)
+  }, [sessionId])
 
   const showHint = useCallback((msg: string) => {
     setSuccessHint(msg)
@@ -71,14 +107,45 @@ export default function HostSessionPage() {
   }, [sessionId])
 
   useEffect(() => {
+    if (String(session?.status ?? '') !== 'question') {
+      setQuestionOverview(null)
+    }
+  }, [session?.status])
+
+  useEffect(() => {
+    if (String(session?.status ?? '') !== 'question') return
+    const qi = Number(session?.current_question_index ?? 0)
+    const q = questions[qi]
+    if (!q?.id) return
+    setQuestionOverview(null)
+    void refreshQuestionOverview()
+    const t = window.setInterval(() => void refreshQuestionOverview(), 2800)
+    return () => window.clearInterval(t)
+  }, [
+    session?.status,
+    session?.current_question_index,
+    questions,
+    refreshQuestionOverview,
+  ])
+
+  useEffect(() => {
     let cancelled = false
     let leaderboardDebounce: ReturnType<typeof setTimeout> | null = null
+    let overviewDebounce: ReturnType<typeof setTimeout> | null = null
 
     const scheduleLeaderboard = () => {
       if (leaderboardDebounce) clearTimeout(leaderboardDebounce)
       leaderboardDebounce = setTimeout(() => {
         leaderboardDebounce = null
         void loadLeaderboard()
+      }, 400)
+    }
+
+    const scheduleQuestionOverview = () => {
+      if (overviewDebounce) clearTimeout(overviewDebounce)
+      overviewDebounce = setTimeout(() => {
+        overviewDebounce = null
+        void refreshQuestionOverview()
       }, 400)
     }
 
@@ -162,6 +229,18 @@ export default function HostSessionPage() {
           if (!cancelled) scheduleLeaderboard()
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'answers',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        () => {
+          if (!cancelled) scheduleQuestionOverview()
+        },
+      )
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
           console.log('[HOST] ✅ Realtime connecté')
@@ -190,10 +269,11 @@ export default function HostSessionPage() {
     return () => {
       cancelled = true
       if (leaderboardDebounce) clearTimeout(leaderboardDebounce)
+      if (overviewDebounce) clearTimeout(overviewDebounce)
       window.clearInterval(pollId)
       void supabase.removeChannel(sessionCh)
     }
-  }, [sessionId, loadLeaderboard])
+  }, [sessionId, loadLeaderboard, refreshQuestionOverview])
 
   useEffect(() => {
     if (session?.status === 'results') {
@@ -201,7 +281,7 @@ export default function HostSessionPage() {
     }
   }, [session?.status, loadLeaderboard])
 
-  const run = async (action: Parameters<typeof hostControlSession>[1]) => {
+  const run = async (action: HostControlAction) => {
     setBusy(true)
     setError(null)
     setSuccessHint(null)
@@ -212,11 +292,13 @@ export default function HostSessionPage() {
         return
       }
       await loadLeaderboard()
-      const hints: Record<string, string> = {
+      const hints: Partial<Record<HostControlAction, string>> = {
         start: 'La partie est lancée — les élèves voient la 1ʳᵉ question.',
         show_leaderboard: 'Classement affiché chez les joueurs.',
         next_question: 'Étape suivante envoyée.',
         end: 'Session terminée.',
+        timer_cut: 'Temps de question terminé pour tous les élèves.',
+        timer_subtract_10: 'Chrono réduit de 10 secondes.',
       }
       const h = hints[action]
       if (h) showHint(h)
@@ -362,6 +444,58 @@ export default function HostSessionPage() {
           </section>
         )}
 
+        {status === 'question' && currentQ && (
+          <section className="rounded-2xl border border-border bg-card p-5 shadow-md">
+            <div className="mb-3 flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <h3 className="font-bold leading-tight">Suivi par élève</h3>
+                <p className="text-xs text-muted-foreground">
+                  Question actuelle : qui a répondu, erreur ou temps écoulé.
+                </p>
+              </div>
+            </div>
+            {questionOverview === null ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Chargement du suivi…
+              </p>
+            ) : questionOverview.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun participant pour l’instant.</p>
+            ) : (
+              <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+                {questionOverview.map((row) => (
+                  <li
+                    key={row.participantId}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate font-medium">{row.nickname}</span>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        row.status === 'waiting'
+                          ? 'bg-muted text-muted-foreground'
+                          : row.status === 'correct'
+                            ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200'
+                            : row.status === 'wrong'
+                              ? 'bg-destructive/15 text-destructive'
+                              : 'bg-amber-500/15 text-amber-900 dark:text-amber-100'
+                      }`}
+                    >
+                      {row.status === 'waiting' && 'En attente'}
+                      {row.status === 'correct' && 'Bonne réponse'}
+                      {row.status === 'wrong' &&
+                        (row.answerLabel
+                          ? `Erreur · choix ${row.answerLabel}`
+                          : 'Mauvaise réponse')}
+                      {row.status === 'timeout' && 'Temps écoulé'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         {status !== 'finished' && session.pin_code != null && (
           <section className="rounded-2xl border border-border bg-muted/20 p-5">
             <p className="text-center text-sm font-semibold text-foreground">
@@ -416,25 +550,51 @@ export default function HostSessionPage() {
         )}
 
         {status === 'question' && (
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              variant="secondary"
-              className="h-12 flex-1 gap-2 font-semibold"
-              disabled={busy}
-              onClick={() => void run('show_leaderboard')}
-            >
-              <Trophy className="h-4 w-4" />
-              Montrer le TOP 5
-            </Button>
-            <Button
-              variant="outline"
-              className="h-12 flex-1 gap-2"
-              disabled={busy}
-              onClick={() => void run('end')}
-            >
-              <Square className="h-4 w-4" />
-              Terminer la session
-            </Button>
+          <div className="space-y-3">
+            <p className="text-center text-xs text-muted-foreground">
+              Chrono synchronisé avec les élèves : vous pouvez le raccourcir ou le couper avant
+              d’afficher le classement.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="outline"
+                className="h-11 flex-1 gap-2"
+                disabled={busy}
+                onClick={() => void run('timer_subtract_10')}
+              >
+                <Minus className="h-4 w-4" />
+                −10 s
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-11 flex-1 gap-2"
+                disabled={busy}
+                onClick={() => void run('timer_cut')}
+              >
+                <Timer className="h-4 w-4" />
+                Couper le chrono
+              </Button>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                variant="secondary"
+                className="h-12 flex-1 gap-2 font-semibold"
+                disabled={busy}
+                onClick={() => void run('show_leaderboard')}
+              >
+                <Trophy className="h-4 w-4" />
+                Montrer le TOP 5
+              </Button>
+              <Button
+                variant="outline"
+                className="h-12 flex-1 gap-2"
+                disabled={busy}
+                onClick={() => void run('end')}
+              >
+                <Square className="h-4 w-4" />
+                Terminer la session
+              </Button>
+            </div>
           </div>
         )}
 

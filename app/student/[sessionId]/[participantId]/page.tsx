@@ -8,11 +8,9 @@ import {
   fetchMergedSessionQuestions,
   sessionLiveFieldsChanged,
 } from '@/lib/session-questions'
-import {
-  submitAnswer,
-  addReaction,
-  getSessionLeaderboard,
-} from '@/app/actions/quiz'
+import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
+import { liveMcqTileClass } from '@/lib/live-mcq-colors'
+import { submitAnswer, getSessionLeaderboard } from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
 import {
   Loader2,
@@ -20,7 +18,6 @@ import {
   Users,
   Zap,
   CheckCircle2,
-  XCircle,
   Clock,
   Flame,
   Sparkles,
@@ -35,10 +32,9 @@ type ParticipantRow = {
 }
 
 type AnswerFeedback =
-  | { kind: 'correct'; pointsEarned: number }
-  | { kind: 'wrong'; pointsEarned: number }
-  | { kind: 'timeout'; pointsEarned: number }
-  | { kind: 'duplicate'; pointsEarned: number }
+  | { kind: 'submitted' }
+  | { kind: 'timeout_wait' }
+  | { kind: 'duplicate' }
 
 type QuestionRow = {
   id: string
@@ -154,13 +150,26 @@ export default function StudentPlayerPage() {
           setSession(newSession)
 
           if (oldIdx !== newIdx) {
-            const merged = questionsRef.current
-            const limit = Math.max(5, Number(merged[newIdx]?.time_limit ?? 30))
-            setTimeLeft(limit)
+            const d = newSession.question_deadline_at
+            if (typeof d === 'string' && d.length > 0) {
+              const end = new Date(d).getTime()
+              if (!Number.isNaN(end)) {
+                setTimeLeft(Math.max(0, Math.ceil((end - Date.now()) / 1000)))
+              } else {
+                const merged = questionsRef.current
+                setTimeLeft(
+                  effectiveLiveQuestionSeconds(merged[newIdx]?.time_limit),
+                )
+              }
+            } else {
+              const merged = questionsRef.current
+              setTimeLeft(
+                effectiveLiveQuestionSeconds(merged[newIdx]?.time_limit),
+              )
+            }
             setAnswered(false)
             setSelectedAnswer(null)
             setAnswerFeedback(null)
-            questionKeyRef.current = String(newIdx)
           }
         },
       )
@@ -249,7 +258,18 @@ export default function StudentPlayerPage() {
       const choice = fromTimeout ? null : selectedAnswer
       const isCorrect =
         choice !== null && String(choice) === String(currentQuestion.correct_answer)
-      const limit = currentQuestion.time_limit ?? 30
+      const startedRaw = session?.question_started_at
+      const startedMs =
+        typeof startedRaw === 'string' && startedRaw.length > 0
+          ? new Date(startedRaw).getTime()
+          : NaN
+      let timeTaken: number
+      if (!Number.isNaN(startedMs)) {
+        timeTaken = Math.max(0, Math.floor((Date.now() - startedMs) / 1000))
+      } else {
+        const budget = effectiveLiveQuestionSeconds(currentQuestion.time_limit)
+        timeTaken = Math.max(0, budget - timeLeft)
+      }
       try {
         const res = await submitAnswer(
           participantId,
@@ -257,27 +277,24 @@ export default function StudentPlayerPage() {
           currentQuestion.id,
           choice === null ? 'timeout' : String(choice),
           isCorrect,
-          Math.max(0, limit - timeLeft),
+          timeTaken,
         )
         if (res && 'duplicate' in res && res.duplicate) {
-          setAnswerFeedback({ kind: 'duplicate', pointsEarned: 0 })
-        } else if (res && 'pointsEarned' in res) {
-          if (fromTimeout || choice === null) {
-            setAnswerFeedback({ kind: 'timeout', pointsEarned: res.pointsEarned })
-          } else if (isCorrect) {
-            setAnswerFeedback({ kind: 'correct', pointsEarned: res.pointsEarned })
-          } else {
-            setAnswerFeedback({ kind: 'wrong', pointsEarned: res.pointsEarned })
-          }
+          setAnswerFeedback({ kind: 'duplicate' })
+        } else if (fromTimeout || choice === null) {
+          setAnswerFeedback({ kind: 'timeout_wait' })
+        } else {
+          setAnswerFeedback({ kind: 'submitted' })
         }
         await refreshMe()
         await refreshLeaderboard()
       } catch (e) {
         console.error(e)
-        setAnswerFeedback({
-          kind: fromTimeout || choice === null ? 'timeout' : isCorrect ? 'correct' : 'wrong',
-          pointsEarned: 0,
-        })
+        setAnswerFeedback(
+          fromTimeout || choice === null
+            ? { kind: 'timeout_wait' }
+            : { kind: 'submitted' },
+        )
       }
     },
     [
@@ -287,6 +304,7 @@ export default function StudentPlayerPage() {
       selectedAnswer,
       participantId,
       sessionId,
+      session?.question_started_at,
       timeLeft,
       refreshMe,
       refreshLeaderboard,
@@ -300,9 +318,30 @@ export default function StudentPlayerPage() {
       setSelectedAnswer(null)
       setAnswered(false)
       setAnswerFeedback(null)
-      setTimeLeft(currentQuestion?.time_limit ?? 30)
+      const dRaw = session?.question_deadline_at
+      const serverOk =
+        status === 'question' &&
+        typeof dRaw === 'string' &&
+        dRaw.length > 0 &&
+        !Number.isNaN(new Date(dRaw).getTime())
+      if (serverOk) {
+        setTimeLeft(
+          Math.max(
+            0,
+            Math.ceil((new Date(String(dRaw)).getTime() - Date.now()) / 1000),
+          ),
+        )
+      } else if (currentQuestion && status === 'question') {
+        setTimeLeft(effectiveLiveQuestionSeconds(currentQuestion.time_limit))
+      }
     }
-  }, [qIndex, currentQuestion?.id, currentQuestion?.time_limit, status])
+  }, [
+    qIndex,
+    currentQuestion?.id,
+    currentQuestion?.time_limit,
+    status,
+    session?.question_deadline_at,
+  ])
 
   useEffect(() => {
     if (status !== 'question' || answered || selectedAnswer === null) return
@@ -319,11 +358,30 @@ export default function StudentPlayerPage() {
   useEffect(() => {
     if (status !== 'question' || answered || !currentQuestion) return
 
-    const t = setInterval(() => {
+    const dRaw = session?.question_deadline_at
+    const hasServerTimer =
+      typeof dRaw === 'string' &&
+      dRaw.length > 0 &&
+      !Number.isNaN(new Date(dRaw).getTime())
+
+    if (hasServerTimer) {
+      const tick = () => {
+        const sec = Math.max(
+          0,
+          Math.ceil((new Date(String(dRaw)).getTime() - Date.now()) / 1000),
+        )
+        setTimeLeft(sec)
+      }
+      tick()
+      const id = window.setInterval(tick, 250)
+      return () => window.clearInterval(id)
+    }
+
+    const t = window.setInterval(() => {
       setTimeLeft((prev) => Math.max(0, prev - 1))
     }, 1000)
-    return () => clearInterval(t)
-  }, [status, answered, currentQuestion?.id])
+    return () => window.clearInterval(t)
+  }, [status, answered, currentQuestion?.id, session?.question_deadline_at])
 
   useEffect(() => {
     if (status !== 'question' || answered || !currentQuestion) return
@@ -337,14 +395,6 @@ export default function StudentPlayerPage() {
       void refreshMe()
     }
   }, [status, refreshLeaderboard, refreshMe])
-
-  const handleReaction = async (emoji: string) => {
-    try {
-      await addReaction(sessionId, participantId, emoji)
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   const liveRealtimeBadge = (
     <div
@@ -534,9 +584,23 @@ export default function StudentPlayerPage() {
   }
 
   if (status === 'question' && currentQuestion) {
-    const timeLimit = Math.max(5, Number(currentQuestion.time_limit ?? 30))
-    const timeRatio = timeLimit > 0 ? timeLeft / timeLimit : 0
-    const correctIdx = Number(currentQuestion.correct_answer)
+    const budgetSeconds = (() => {
+      const start = session?.question_started_at
+      const end = session?.question_deadline_at
+      if (
+        typeof start === 'string' &&
+        typeof end === 'string' &&
+        start.length > 0 &&
+        end.length > 0
+      ) {
+        const dur = Math.round(
+          (new Date(end).getTime() - new Date(start).getTime()) / 1000,
+        )
+        if (dur > 0) return dur
+      }
+      return effectiveLiveQuestionSeconds(currentQuestion.time_limit)
+    })()
+    const timeRatio = budgetSeconds > 0 ? timeLeft / budgetSeconds : 0
 
     return (
       <div className="min-h-[100dvh] bg-gradient-to-b from-emerald-500/5 via-background to-muted/25 pb-36">
@@ -607,45 +671,28 @@ export default function StudentPlayerPage() {
             </h2>
 
             {currentQuestion.question_type === 'mcq' && Array.isArray(currentQuestion.options) && (
-              <div className="mt-6 grid grid-cols-1 gap-3">
+              <div className="mt-6 grid grid-cols-2 gap-3">
                 {currentQuestion.options.map((option: string, idx: number) => {
+                  const nOpts = currentQuestion.options!.length
                   const isSel = selectedAnswer === String(idx)
-                  const isCor = idx === correctIdx
-                  let reveal = ''
-                  if (answered) {
-                    if (isCor) {
-                      reveal =
-                        'border-emerald-500 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100'
-                    } else if (isSel && !isCor) {
-                      reveal = 'border-destructive bg-destructive/10'
-                    } else {
-                      reveal = 'opacity-45'
-                    }
-                  }
+                  const canInteract = !answered && timeLeft > 0
+                  const spanFull = nOpts % 2 === 1 && idx === nOpts - 1
                   return (
                     <button
                       key={idx}
                       type="button"
-                      disabled={answered}
-                      onClick={() => !answered && setSelectedAnswer(String(idx))}
-                      className={`rounded-xl border-2 px-4 py-4 text-left text-sm font-medium transition-all active:scale-[0.98] ${
-                        !answered && isSel
-                          ? 'border-primary bg-primary/15 shadow-md'
-                          : !answered
-                            ? 'border-border bg-background hover:border-primary/35'
-                            : ''
-                      } ${reveal}`}
+                      disabled={!canInteract}
+                      onClick={() => canInteract && setSelectedAnswer(String(idx))}
+                      className={`flex min-h-[100px] flex-col justify-center px-4 py-4 text-left ${liveMcqTileClass(idx, {
+                        isSelected: isSel,
+                        answered,
+                        canInteract,
+                      })} ${spanFull ? 'col-span-2' : ''}`}
                     >
-                      <span className="mr-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-current text-xs font-bold">
+                      <span className="text-[10px] font-black uppercase tracking-widest opacity-85">
                         {String.fromCharCode(65 + idx)}
                       </span>
-                      {option}
-                      {answered && isCor && (
-                        <CheckCircle2 className="ml-2 inline h-4 w-4 text-emerald-600" />
-                      )}
-                      {answered && isSel && !isCor && (
-                        <XCircle className="ml-2 inline h-4 w-4 text-destructive" />
-                      )}
+                      <p className="mt-1 text-base font-semibold leading-snug">{option}</p>
                     </button>
                   )
                 })}
@@ -656,27 +703,18 @@ export default function StudentPlayerPage() {
               <div className="mt-6 grid grid-cols-2 gap-3">
                 {['Vrai', 'Faux'].map((label, idx) => {
                   const isSel = selectedAnswer === String(idx)
-                  const isCor = idx === correctIdx
-                  let reveal = ''
-                  if (answered) {
-                    if (isCor) {
-                      reveal =
-                        'border-emerald-500 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100'
-                    } else if (isSel && !isCor) {
-                      reveal = 'border-destructive bg-destructive/10'
-                    } else {
-                      reveal = 'opacity-45'
-                    }
-                  }
+                  const canInteract = !answered && timeLeft > 0
                   return (
                     <button
                       key={label}
                       type="button"
-                      disabled={answered}
-                      onClick={() => !answered && setSelectedAnswer(String(idx))}
-                      className={`rounded-xl border-2 py-4 text-center text-base font-bold transition-all ${
-                        !answered && isSel ? 'border-primary bg-primary/15' : !answered ? 'border-border' : ''
-                      } ${reveal}`}
+                      disabled={!canInteract}
+                      onClick={() => canInteract && setSelectedAnswer(String(idx))}
+                      className={`flex min-h-[120px] items-center justify-center px-4 py-6 text-center text-xl font-black ${liveMcqTileClass(idx, {
+                        isSelected: isSel,
+                        answered,
+                        canInteract,
+                      })}`}
                     >
                       {label}
                     </button>
@@ -685,34 +723,20 @@ export default function StudentPlayerPage() {
               </div>
             )}
 
-            {!answered && (
-              <div className="mt-6 flex flex-wrap justify-center gap-2 border-t border-border pt-4">
-                {['🔥', '👏', '😂', '🎉', '💡'].map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => void handleReaction(emoji)}
-                    className="text-2xl transition-transform hover:scale-125 active:scale-95"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="mt-6 space-y-4">
               {!answered ? (
                 <>
                   <Button
                     className="h-12 w-full gap-2 text-base font-bold shadow-md"
-                    disabled={selectedAnswer === null}
+                    disabled={selectedAnswer === null || timeLeft <= 0}
                     onClick={() => void handleSubmitAnswer(false)}
                   >
                     <Zap className="h-5 w-5" />
-                    Valider (ou Entrée)
+                    Valider ma réponse
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    Choisis une réponse puis valide — le chrono compte.
+                    Un seul envoi après choix — le temps est synchronisé avec l’animateur (Entrée pour
+                    valider).
                   </p>
                 </>
               ) : (
@@ -720,40 +744,32 @@ export default function StudentPlayerPage() {
                   {answerFeedback && (
                     <div
                       className={`live-feedback-pop rounded-xl border-2 p-4 text-center ${
-                        answerFeedback.kind === 'correct'
-                          ? 'border-emerald-500/50 bg-emerald-500/10'
-                          : answerFeedback.kind === 'wrong'
-                            ? 'border-destructive/40 bg-destructive/10'
-                            : answerFeedback.kind === 'timeout'
-                              ? 'border-amber-500/40 bg-amber-500/10'
-                              : 'border-border bg-muted/40'
+                        answerFeedback.kind === 'submitted'
+                          ? 'border-primary/40 bg-primary/10'
+                          : answerFeedback.kind === 'timeout_wait'
+                            ? 'border-amber-500/40 bg-amber-500/10'
+                            : 'border-border bg-muted/40'
                       }`}
                     >
-                      {answerFeedback.kind === 'correct' && (
+                      {answerFeedback.kind === 'submitted' && (
                         <>
-                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-600" />
-                          <p className="text-lg font-black text-emerald-800 dark:text-emerald-200">
-                            Bonne réponse !
-                          </p>
-                          <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-                            +{answerFeedback.pointsEarned} points
+                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-primary" />
+                          <p className="text-lg font-bold text-foreground">Réponse enregistrée</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Le bon résultat et les points seront visibles quand l’animateur affichera le
+                            classement.
                           </p>
                         </>
                       )}
-                      {answerFeedback.kind === 'wrong' && (
-                        <>
-                          <XCircle className="mx-auto mb-2 h-10 w-10 text-destructive" />
-                          <p className="text-lg font-bold text-destructive">Pas tout à fait…</p>
-                          <p className="mt-1 text-sm text-muted-foreground">Pas de point cette fois.</p>
-                        </>
-                      )}
-                      {answerFeedback.kind === 'timeout' && (
+                      {answerFeedback.kind === 'timeout_wait' && (
                         <>
                           <Clock className="mx-auto mb-2 h-10 w-10 text-amber-600" />
-                          <p className="text-lg font-bold text-amber-800 dark:text-amber-200">
+                          <p className="text-lg font-bold text-amber-900 dark:text-amber-100">
                             Temps écoulé
                           </p>
-                          <p className="mt-1 text-sm text-muted-foreground">Réponse non prise en compte.</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Aucune réponse enregistrée pour cette question.
+                          </p>
                         </>
                       )}
                       {answerFeedback.kind === 'duplicate' && (
@@ -763,13 +779,6 @@ export default function StudentPlayerPage() {
                       )}
                     </div>
                   )}
-                  {typeof currentQuestion.explanation === 'string' &&
-                    currentQuestion.explanation.trim().length > 0 && (
-                      <div className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm leading-relaxed text-muted-foreground">
-                        <span className="font-semibold text-foreground">Pourquoi ? </span>
-                        {currentQuestion.explanation}
-                      </div>
-                    )}
                   <p className="text-center text-sm font-medium text-muted-foreground">
                     En attente du classement affiché par l’animateur…
                   </p>

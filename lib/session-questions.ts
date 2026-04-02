@@ -52,6 +52,8 @@ export function sessionLiveFieldsChanged(
     prev.status !== next.status ||
     Number(prev.current_question_index ?? 0) !== Number(next.current_question_index ?? 0) ||
     prev.game_mode !== next.game_mode ||
-    prev.secondary_quiz_id !== next.secondary_quiz_id
+    prev.secondary_quiz_id !== next.secondary_quiz_id ||
+    String(prev.question_deadline_at ?? '') !== String(next.question_deadline_at ?? '') ||
+    String(prev.question_started_at ?? '') !== String(next.question_started_at ?? '')
   )
 }

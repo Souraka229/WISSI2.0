@@ -2,7 +2,12 @@
 
 import { randomInt } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
-import { countSessionQuestions } from '@/lib/session-questions'
+import {
+  countSessionQuestions,
+  fetchMergedSessionQuestions,
+  type SessionRow,
+} from '@/lib/session-questions'
+import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
 import { revalidateTag } from 'next/cache'
 
 export type GameMode = 'challenge_free' | 'prof_dual'
@@ -356,13 +361,21 @@ export async function updateSessionStatus(
 
 export type HostControlResult = { ok: true } | { ok: false; error: string }
 
+export type HostControlAction =
+  | 'start'
+  | 'show_leaderboard'
+  | 'next_question'
+  | 'end'
+  | 'timer_cut'
+  | 'timer_subtract_10'
+
 /**
  * Ne pas utiliser `throw` pour les erreurs métier : en production Next.js remplace le message
  * par « An error occurred in the Server Components render… » sur le client.
  */
 export async function hostControlSession(
   sessionId: string,
-  action: 'start' | 'show_leaderboard' | 'next_question' | 'end',
+  action: HostControlAction,
 ): Promise<HostControlResult> {
   try {
     const supabase = await createClient()
@@ -406,6 +419,15 @@ export async function hostControlSession(
       return { ok: false, error: 'Aucune question dans cette session.' }
     }
 
+    const buildQuestionTimerFields = async (questionIndex: number) => {
+      const qs = await fetchMergedSessionQuestions(supabase, session as SessionRow)
+      const q = qs[questionIndex] as { time_limit?: number } | undefined
+      const sec = effectiveLiveQuestionSeconds(q?.time_limit)
+      const question_started_at = new Date().toISOString()
+      const question_deadline_at = new Date(Date.now() + sec * 1000).toISOString()
+      return { question_started_at, question_deadline_at }
+    }
+
     const patch = async (
       fields: Record<string, unknown>,
     ): Promise<string | null> => {
@@ -437,16 +459,22 @@ export async function hostControlSession(
         if (st !== 'waiting') {
           return { ok: false, error: 'La partie est déjà lancée ou terminée.' }
         }
+        const timer = await buildQuestionTimerFields(0)
         const err = await patch({
           status: 'question',
           current_question_index: 0,
           started_at: new Date().toISOString(),
+          ...timer,
         })
         if (err) return { ok: false, error: err }
         break
       }
       case 'show_leaderboard': {
-        const err = await patch({ status: 'results' })
+        const err = await patch({
+          status: 'results',
+          question_started_at: null,
+          question_deadline_at: null,
+        })
         if (err) return { ok: false, error: err }
         break
       }
@@ -457,12 +485,16 @@ export async function hostControlSession(
           const err = await patch({
             status: 'finished',
             ended_at: new Date().toISOString(),
+            question_started_at: null,
+            question_deadline_at: null,
           })
           if (err) return { ok: false, error: err }
         } else {
+          const timer = await buildQuestionTimerFields(nextIdx)
           const err = await patch({
             status: 'question',
             current_question_index: nextIdx,
+            ...timer,
           })
           if (err) return { ok: false, error: err }
         }
@@ -472,7 +504,43 @@ export async function hostControlSession(
         const err = await patch({
           status: 'finished',
           ended_at: new Date().toISOString(),
+          question_started_at: null,
+          question_deadline_at: null,
         })
+        if (err) return { ok: false, error: err }
+        break
+      }
+      case 'timer_cut': {
+        if (st !== 'question') {
+          return {
+            ok: false,
+            error: 'Le chrono n’est actif que pendant une question affichée aux élèves.',
+          }
+        }
+        const err = await patch({
+          question_deadline_at: new Date().toISOString(),
+        })
+        if (err) return { ok: false, error: err }
+        break
+      }
+      case 'timer_subtract_10': {
+        if (st !== 'question') {
+          return {
+            ok: false,
+            error: 'Le chrono n’est actif que pendant une question affichée aux élèves.',
+          }
+        }
+        const d = session.question_deadline_at
+        if (d == null || String(d).length === 0) {
+          return {
+            ok: false,
+            error:
+              'Chrono serveur absent : exécutez scripts/005_question_timer_sync.sql sur Supabase, puis relancez une question.',
+          }
+        }
+        const ms = new Date(String(d)).getTime() - 10_000
+        const newDeadline = new Date(Math.max(Date.now(), ms)).toISOString()
+        const err = await patch({ question_deadline_at: newDeadline })
         if (err) return { ok: false, error: err }
         break
       }
@@ -489,6 +557,123 @@ export async function hostControlSession(
         'Erreur serveur. En local, lancez npm run dev pour voir le détail ; en prod, consultez les logs Vercel.',
     }
   }
+}
+
+export type HostQuestionParticipantStatus = 'waiting' | 'correct' | 'wrong' | 'timeout'
+
+export type HostQuestionLiveRow = {
+  participantId: string
+  nickname: string
+  status: HostQuestionParticipantStatus
+  /** Lettre A–D pour QCM, « Vrai » / « Faux » pour V/F, null si en attente */
+  answerLabel: string | null
+}
+
+/**
+ * Pupitre : pour la question courante, état de chaque élève (réponse ou non, bon / mauvais / temps écoulé).
+ * Réservé à l’animateur (host) de la session.
+ */
+export async function getHostQuestionLiveOverview(
+  sessionId: string,
+  questionId: string,
+): Promise<
+  | { ok: false; error: string }
+  | { ok: true; rows: HostQuestionLiveRow[] }
+> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { ok: false, error: 'Non authentifié.' }
+  }
+
+  const { data: sess, error: sErr } = await supabase
+    .from('sessions')
+    .select('host_id')
+    .eq('id', sessionId)
+    .single()
+
+  if (sErr || !sess || sess.host_id !== user.id) {
+    return { ok: false, error: 'Session introuvable ou vous n’êtes pas l’animateur.' }
+  }
+
+  const { data: participants, error: pErr } = await supabase
+    .from('participants')
+    .select('id, nickname')
+    .eq('session_id', sessionId)
+    .order('nickname', { ascending: true })
+
+  if (pErr) {
+    console.error('[getHostQuestionLiveOverview] participants', pErr)
+    return { ok: false, error: 'Impossible de charger les participants.' }
+  }
+
+  const { data: answers, error: aErr } = await supabase
+    .from('answers')
+    .select('participant_id, answer, is_correct')
+    .eq('session_id', sessionId)
+    .eq('question_id', questionId)
+
+  if (aErr) {
+    console.error('[getHostQuestionLiveOverview] answers', aErr)
+    return { ok: false, error: 'Impossible de charger les réponses.' }
+  }
+
+  const { data: qMeta } = await supabase
+    .from('questions')
+    .select('question_type')
+    .eq('id', questionId)
+    .maybeSingle()
+
+  const qType = qMeta?.question_type ?? 'mcq'
+
+  const byParticipant = new Map(
+    (answers ?? []).map((a) => [a.participant_id as string, a]),
+  )
+
+  const formatAnswerLabel = (raw: string | number | null | undefined): string => {
+    const answer = raw == null ? '' : String(raw)
+    if (answer === 'timeout') return '—'
+    const n = Number(answer)
+    if (qType === 'true_false') {
+      if (answer === '0' || n === 0) return 'Vrai'
+      if (answer === '1' || n === 1) return 'Faux'
+    }
+    if (Number.isFinite(n) && n >= 0 && n <= 25) {
+      return String.fromCharCode(65 + n)
+    }
+    return answer || '—'
+  }
+
+  const rows: HostQuestionLiveRow[] = (participants ?? []).map((p) => {
+    const a = byParticipant.get(p.id)
+    if (!a) {
+      return {
+        participantId: p.id,
+        nickname: p.nickname,
+        status: 'waiting',
+        answerLabel: null,
+      }
+    }
+    if (String(a.answer) === 'timeout') {
+      return {
+        participantId: p.id,
+        nickname: p.nickname,
+        status: 'timeout',
+        answerLabel: '—',
+      }
+    }
+    return {
+      participantId: p.id,
+      nickname: p.nickname,
+      status: a.is_correct ? 'correct' : 'wrong',
+      answerLabel: formatAnswerLabel(a.answer),
+    }
+  })
+
+  return { ok: true, rows }
 }
 
 /** Classement pour l’affichage joueur (anonyme autorisé par RLS). */

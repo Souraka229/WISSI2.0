@@ -108,6 +108,8 @@ create table if not exists public.sessions (
   reactions_enabled boolean default true,
   started_at timestamptz,
   ended_at timestamptz,
+  question_started_at timestamptz,
+  question_deadline_at timestamptz,
   created_at timestamptz default now()
 );
 
