@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,20 @@ import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { ArrowRight, Play, Users, BarChart3, Zap, Clock, Shield, Check } from 'lucide-react'
+import {
+  ArrowRight,
+  Play,
+  Users,
+  BarChart3,
+  Zap,
+  Clock,
+  Shield,
+  Check,
+  Sparkles,
+  Radio,
+  LayoutList,
+} from 'lucide-react'
+import { SiteFooter } from '@/components/landing/site-footer'
 
 export default function LandingPage() {
   const [pinCode, setPinCode] = useState('')
@@ -33,21 +47,53 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-                <span className="text-background font-bold text-sm">Q</span>
-              </div>
-              <span className="text-lg font-semibold tracking-tight">SCITI-Quiz</span>
-            </div>
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+        aria-hidden
+      >
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,oklch(0.55_0.22_270/0.18),transparent_65%)] dark:bg-[radial-gradient(ellipse_at_center,oklch(0.55_0.22_270/0.25),transparent_65%)]" />
+        <div className="absolute top-[40vh] right-[-20%] h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle,oklch(0.65_0.2_320/0.12),transparent_70%)]" />
+      </div>
 
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#fonctionnalites" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Fonctionnalités</a>
-              <a href="#tarifs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Tarifs</a>
-              <a href="#temoignages" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Témoignages</a>
+      {/* Navigation */}
+      <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            <Link
+              href="/"
+              className="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-sm font-black text-white shadow-md shadow-violet-500/25">
+                Q
+              </div>
+              <span className="text-lg font-bold tracking-tight">SCITI-Quiz</span>
+            </Link>
+
+            <div className="hidden items-center gap-8 md:flex">
+              <a
+                href="#comment-ca-marche"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Comment ça marche
+              </a>
+              <a
+                href="#fonctionnalites"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Fonctionnalités
+              </a>
+              <a
+                href="#tarifs"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Tarifs
+              </a>
+              <a
+                href="#temoignages"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Témoignages
+              </a>
             </div>
 
             <div className="flex items-center gap-3">
@@ -90,77 +136,156 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="max-w-4xl">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] mb-8 text-balance">
-              La plateforme complète pour
-              <br />
-              <span className="text-muted-foreground">engager vos étudiants</span>
+      <section className="px-6 pb-20 pt-28 lg:px-8 lg:pt-32">
+        <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12">
+          <div className="max-w-3xl">
+            <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-violet-800 dark:text-violet-200">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Plateforme quiz live · SCITI / WISSI
+            </p>
+            <h1 className="mb-8 text-balance text-5xl font-black tracking-tight text-foreground md:text-6xl lg:text-7xl lg:leading-[1.05]">
+              Créez. Lancez.{' '}
+              <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-violet-400 dark:to-fuchsia-400">
+                Analysez.
+              </span>
             </h1>
 
-            <p className="text-xl text-muted-foreground max-w-2xl mb-12 leading-relaxed">
-              Créez des quiz interactifs en temps réel. Suivez les performances instantanément.
-              Exportez vos analyses en PDF. Tout ce dont vous avez besoin pour transformer vos cours.
+            <p className="mb-10 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-xl">
+              QCM en direct, PIN & QR code, classement live et exports — pensé pour les enseignants qui veulent
+              captiver la salle, pas perdre du temps dans les outils.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 mb-16">
+            <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
               <Link href="/auth/sign-up">
-                <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 gap-2 h-12 px-6 text-base">
-                  Créer un compte gratuit <ArrowRight className="w-4 h-4" />
+                <Button
+                  size="lg"
+                  className="h-12 gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-7 text-base font-bold text-white shadow-lg shadow-violet-500/25 hover:opacity-95"
+                >
+                  Créer un compte gratuit <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <a href="#fonctionnalites">
+              <Link href="/join">
                 <Button
                   size="lg"
                   variant="outline"
-                  className="gap-2 h-12 px-6 text-base border-border hover:bg-card"
+                  className="h-12 border-border/80 bg-background/50 px-7 text-base font-semibold backdrop-blur-sm"
                   type="button"
                 >
-                  <Play className="w-4 h-4" /> Voir les fonctionnalités
-                </Button>
-              </a>
-            </div>
-          </div>
-
-          {/* Quick Join Card */}
-          <div className="bg-card border border-border rounded-xl p-6 max-w-md">
-            <p className="text-sm text-muted-foreground mb-3">Rejoindre un quiz en cours</p>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Entrez le code PIN"
-                value={pinCode}
-                onChange={(e) => setPinCode(e.target.value)}
-                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
-              />
-              <Link href={pinCode ? `/join?pin=${pinCode}` : '/join'}>
-                <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
-                  Rejoindre
+                  <Play className="h-4 w-4" /> Rejoindre avec un PIN
                 </Button>
               </Link>
+            </div>
+
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Déjà utilisé dans des cours · UAC · SCITI · formations pro
+            </p>
+          </div>
+
+          {/* Quick Join + mock card */}
+          <div className="flex flex-col gap-5">
+            <div className="rounded-2xl border border-border/80 bg-card/90 p-6 shadow-xl shadow-violet-500/5 backdrop-blur-sm dark:bg-card/80">
+              <p className="mb-3 text-sm font-semibold text-foreground">Rejoindre un quiz en cours</p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  placeholder="Code PIN (ex. 123456)"
+                  value={pinCode}
+                  onChange={(e) => setPinCode(e.target.value)}
+                  className="h-11 border-border/80 bg-background/80"
+                />
+                <Link href={pinCode ? `/join?pin=${encodeURIComponent(pinCode)}` : '/join'} className="shrink-0">
+                  <Button className="h-11 w-full bg-violet-600 font-semibold text-white hover:bg-violet-600/90 sm:w-auto">
+                    Rejoindre
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-violet-500/[0.06] p-6 shadow-lg">
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-fuchsia-500/10 blur-2xl" aria-hidden />
+              <div className="relative">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Aperçu animateur</p>
+                    <p className="text-lg font-bold tracking-tight">Session · Thermodynamique L2</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    En direct
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-md bg-muted/80 px-2 py-1 font-medium text-foreground">12 questions</span>
+                  <span className="rounded-md bg-muted/80 px-2 py-1">Intermédiaire</span>
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">4 sessions</span> · 87 étudiants touchés cette
+                  semaine
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 px-6 lg:px-8 border-y border-border">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <section className="border-y border-border/80 bg-muted/20 py-16 dark:bg-muted/10">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4 md:gap-0 md:divide-x md:divide-border/60">
             <StatBlock value="+85%" label="d'engagement en classe" />
-            <StatBlock value="2.4M" label="de quiz créés" />
-            <StatBlock value="98%" label="de satisfaction" />
-            <StatBlock value="<30s" label="pour lancer un quiz" />
+            <StatBlock value="Live" label="sessions multijoueur" />
+            <StatBlock value="IA" label="génération de QCM" />
+            <StatBlock value="< 2 min" label="pour un premier quiz" />
+          </div>
+        </div>
+      </section>
+
+      {/* Comment ça marche */}
+      <section
+        id="comment-ca-marche"
+        className="scroll-mt-24 px-6 py-24 lg:px-8"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+              Comment ça marche
+            </p>
+            <h2 className="text-3xl font-black tracking-tight text-foreground md:text-4xl">
+              Trois étapes, zéro prise de tête
+            </h2>
+          </div>
+          <div className="grid gap-8 md:grid-cols-3">
+            <StepCard
+              step="01"
+              icon={<LayoutList className="h-6 w-6" />}
+              title="Créez votre quiz"
+              description="Manuellement, par import JSON ou avec l’IA — thème, niveau et questions en quelques minutes."
+            />
+            <StepCard
+              step="02"
+              icon={<Radio className="h-6 w-6" />}
+              title="Lancez la session"
+              description="PIN + QR code : les étudiants rejoignent sur /join depuis leur téléphone, sans compte."
+            />
+            <StepCard
+              step="03"
+              icon={<BarChart3 className="h-6 w-6" />}
+              title="Analysez les résultats"
+              description="Classement, stats par question, exports CSV / PDF pour le suivi et le conseil pédagogique."
+            />
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="fonctionnalites" className="py-24 px-6 lg:px-8">
+      <section id="fonctionnalites" className="scroll-mt-24 px-6 py-24 lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="max-w-2xl mb-16">
-            <p className="text-sm text-secondary font-medium mb-4">Fonctionnalités</p>
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
+          <div className="mb-16 max-w-2xl">
+            <p
+              id="changelog"
+              className="mb-4 scroll-mt-28 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400"
+            >
+              Fonctionnalités & nouveautés
+            </p>
+            <h2 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl">
               Tout pour créer des expériences
               <br />
               <span className="text-muted-foreground">d&apos;apprentissage mémorables</span>
@@ -273,11 +398,30 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* À propos */}
+      <section
+        id="apropos"
+        className="scroll-mt-24 border-y border-border/80 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-6 py-20 lg:px-8"
+      >
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="mb-4 text-2xl font-black tracking-tight text-foreground md:text-3xl">
+            Une initiative pédagogique SCITI / WISSI
+          </h2>
+          <p className="leading-relaxed text-muted-foreground">
+            SCITI-Quiz est conçu pour les enseignants africains et francophones : sessions stables, faible bande
+            passante, et parcours clairs du premier quiz au bilan de session. L’objectif est simple — plus
+            d’engagement en salle, moins de friction technique.
+          </p>
+        </div>
+      </section>
+
       {/* Testimonials Section */}
-      <section id="temoignages" className="py-24 px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-sm text-secondary font-medium mb-4">Témoignages</p>
+      <section id="temoignages" className="scroll-mt-24 px-6 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-16 text-center">
+            <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+              Témoignages
+            </p>
             <h2 className="text-4xl font-bold tracking-tight">
               Ils utilisent SCITI-Quiz au quotidien
             </h2>
@@ -307,12 +451,14 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="tarifs" className="py-24 px-6 lg:px-8 bg-card border-y border-border">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-sm text-secondary font-medium mb-4">Tarifs</p>
-            <h2 className="text-4xl font-bold tracking-tight mb-4">
-              Un prix simple, des fonctionnalités complètes
+      <section id="tarifs" className="scroll-mt-24 border-y border-border bg-card px-6 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-16 text-center">
+            <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+              Tarifs
+            </p>
+            <h2 id="roadmap" className="mb-4 scroll-mt-28 text-4xl font-bold tracking-tight">
+              Un prix simple — roadmap produit transparente
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Commencez gratuitement. Passez à Pro quand vous êtes prêt.
@@ -372,91 +518,70 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
-            Prêt à transformer vos cours ?
+      <section className="px-6 py-24 lg:px-8">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="mb-6 text-4xl font-black tracking-tight text-foreground md:text-5xl">
+            Prêt à animer votre prochain cours ?
           </h2>
-          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            Rejoignez des milliers d&apos;enseignants qui utilisent SCITI-Quiz pour créer des expériences d&apos;apprentissage engageantes.
+          <p className="mx-auto mb-10 max-w-2xl text-lg text-muted-foreground">
+            Créez un compte gratuit, composez un quiz et lancez une session en quelques minutes. Vos étudiants
+            rejoignent avec un simple code.
           </p>
           <Link href="/auth/sign-up">
-            <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 gap-2 h-14 px-8 text-lg">
-              Créer mon compte gratuitement <ArrowRight className="w-5 h-5" />
+            <Button
+              size="lg"
+              className="h-14 gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 text-lg font-bold text-white shadow-lg shadow-violet-500/25 hover:opacity-95"
+            >
+              Créer mon compte gratuitement <ArrowRight className="h-5 w-5" />
             </Button>
           </Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-16 px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-            <div>
-              <h3 className="font-semibold mb-4">Produit</h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#fonctionnalites" className="hover:text-foreground transition-colors">Fonctionnalités</a></li>
-                <li><a href="#tarifs" className="hover:text-foreground transition-colors">Tarifs</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Changelog</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Roadmap</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Ressources</h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Tutoriels</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Centre d&apos;aide</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Entreprise</h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">À propos</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Carrières</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Presse</a></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-4">Légal</h3>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Confidentialité</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">CGU</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Cookies</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">RGPD</a></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 bg-foreground rounded flex items-center justify-center">
-                <span className="text-background font-bold text-xs">Q</span>
-              </div>
-              <span className="font-semibold">SCITI-Quiz</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} SCITI-Quiz. Tous droits réservés.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
 
 function StatBlock({ value, label }: { value: string; label: string }) {
   return (
-    <div className="text-center">
-      <p className="text-3xl md:text-4xl font-bold mb-1">{value}</p>
-      <p className="text-sm text-muted-foreground">{label}</p>
+    <div className="px-2 text-center md:px-6">
+      <p className="mb-1 bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-3xl font-black tracking-tight text-transparent md:text-4xl dark:from-white dark:to-white/80">
+        {value}
+      </p>
+      <p className="text-xs font-medium text-muted-foreground md:text-sm">{label}</p>
     </div>
   )
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+function StepCard({
+  step,
+  icon,
+  title,
+  description,
+}: {
+  step: string
+  icon: ReactNode
+  title: string
+  description: string
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-8 shadow-sm transition-all duration-300 hover:border-violet-500/30 hover:shadow-md">
+      <div className="absolute -right-6 -top-6 text-8xl font-black tabular-nums text-violet-500/[0.07] transition-colors group-hover:text-violet-500/[0.12] dark:text-violet-400/[0.09]">
+        {step}
+      </div>
+      <div className="relative">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/15 to-fuchsia-500/10 text-violet-700 dark:text-violet-300">
+          {icon}
+        </div>
+        <h3 className="mb-3 text-xl font-bold tracking-tight text-foreground">{title}</h3>
+        <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function FeatureCard({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
   return (
     <div className="bg-card border border-border rounded-xl p-6 hover:border-secondary/50 transition-colors">
       <div className="w-10 h-10 bg-secondary/20 rounded-lg flex items-center justify-center mb-4 text-secondary">
@@ -468,7 +593,7 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
   )
 }
 
-function CheckItem({ children }: { children: React.ReactNode }) {
+function CheckItem({ children }: { children: ReactNode }) {
   return (
     <li className="flex items-start gap-3">
       <div className="w-5 h-5 bg-secondary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -481,12 +606,12 @@ function CheckItem({ children }: { children: React.ReactNode }) {
 
 function TestimonialCard({ quote, author, role, institution }: { quote: string; author: string; role: string; institution: string }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-6">
-      <p className="text-muted-foreground mb-6 leading-relaxed">&quot;{quote}&quot;</p>
+    <div className="rounded-2xl border border-border/80 bg-card/80 p-6 shadow-sm transition-shadow hover:shadow-md">
+      <p className="mb-6 leading-relaxed text-muted-foreground">&ldquo;{quote}&rdquo;</p>
       <div>
-        <p className="font-semibold">{author}</p>
+        <p className="font-bold text-foreground">{author}</p>
         <p className="text-sm text-muted-foreground">{role}</p>
-        <p className="text-sm text-secondary">{institution}</p>
+        <p className="text-sm font-medium text-violet-600 dark:text-violet-400">{institution}</p>
       </div>
     </div>
   )
@@ -512,20 +637,31 @@ function PricingCard({
   highlighted?: boolean
 }) {
   return (
-    <div className={`rounded-xl p-6 flex flex-col ${highlighted ? 'bg-secondary/10 border-2 border-secondary' : 'bg-background border border-border'}`}>
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-1">{name}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{description}</p>
+    <div
+      className={`flex flex-col rounded-2xl p-6 ${
+        highlighted
+          ? 'relative border-2 border-violet-500/50 bg-gradient-to-b from-violet-500/10 to-card shadow-lg shadow-violet-500/10'
+          : 'border border-border/80 bg-background/80'
+      }`}
+    >
+      {highlighted ? (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 py-0.5 text-xs font-bold text-white shadow-md">
+          Populaire
+        </span>
+      ) : null}
+      <div className="mb-6 pt-1">
+        <h3 className="mb-1 text-lg font-bold">{name}</h3>
+        <p className="mb-4 text-sm text-muted-foreground">{description}</p>
         <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold">{price}</span>
+          <span className="text-4xl font-black tracking-tight">{price}</span>
           <span className="text-muted-foreground">{period}</span>
         </div>
       </div>
 
-      <ul className="space-y-3 mb-8 flex-1">
+      <ul className="mb-8 flex-1 space-y-3">
         {features.map((feature, i) => (
           <li key={i} className="flex items-center gap-3 text-sm">
-            <Check className="w-4 h-4 text-secondary flex-shrink-0" />
+            <Check className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
             <span className="text-muted-foreground">{feature}</span>
           </li>
         ))}
@@ -533,7 +669,11 @@ function PricingCard({
 
       <Link href={href} className="w-full">
         <Button
-          className={`w-full ${highlighted ? 'bg-foreground text-background hover:bg-foreground/90' : 'bg-card border border-border hover:bg-muted text-foreground'}`}
+          className={`w-full font-semibold ${
+            highlighted
+              ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-95'
+              : 'border border-border bg-background hover:bg-muted'
+          }`}
         >
           {cta}
         </Button>

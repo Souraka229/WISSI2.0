@@ -1,6 +1,9 @@
 -- Superadmin (rôle), analytics (événements) et consentement cookies.
 -- Exécuter une fois sur le projet Supabase (SQL Editor ou migration).
 -- Promouvoir un compte : update public.profiles set role = 'superadmin' where email = 'vous@exemple.com';
+--
+-- Pour accès lecture/écriture sur TOUTES les tables métier (quiz, sessions, cookies, etc.) :
+-- exécuter aussi scripts/008_superadmin_full_access.sql
 
 -- ---------------------------------------------------------------------------
 -- Rôle sur les profils
