@@ -1,8 +1,5 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-
-/** Vercel Pro / Enterprise : évite les 504 si les agrégations DB restent lourdes. */
-export const maxDuration = 60
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ThemeSwitcher } from '@/components/theme-switcher'
@@ -14,6 +11,11 @@ import {
   type RecentSessionItem,
 } from './dashboard-cockpit-view'
 import type { CockpitQuizRow } from '@/components/dashboard/dashboard-quiz-cockpit-grid'
+
+/** Vercel : marge sur la durée d’exécution serverless (Pro/Entreprise). */
+export const maxDuration = 60
+
+export const dynamic = 'force-dynamic'
 
 /** Colonnes nécessaires au cockpit (évite select * + embed count, source de timeouts Vercel). */
 const QUIZ_COCKPIT_COLUMNS =
@@ -101,9 +103,10 @@ function sessionStatusBadge(status: string): { label: string; className: string 
 }
 
 async function DashboardCockpitLoader({ userId, userEmail }: { userId: string; userEmail: string }) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const [profileRes, quizzesRes, sessionsRes] = await Promise.all([
+    const [profileRes, quizzesRes, sessionsRes] = await Promise.all([
     supabase.from('profiles').select('display_name,email').eq('id', userId).single(),
     supabase
       .from('quizzes')
@@ -240,17 +243,31 @@ async function DashboardCockpitLoader({ userId, userEmail }: { userId: string; u
     },
   ]
 
-  return (
-    <DashboardCockpitView
-      greeting={greetingFr()}
-      firstName={firstName}
-      dateLong={dateLong}
-      statCards={statCards}
-      recentSessions={recentSessions}
-      cockpitRows={cockpitRows}
-      quizCount={quizzes.length}
-    />
-  )
+    return (
+      <DashboardCockpitView
+        greeting={greetingFr()}
+        firstName={firstName}
+        dateLong={dateLong}
+        statCards={statCards}
+        recentSessions={recentSessions}
+        cockpitRows={cockpitRows}
+        quizCount={quizzes.length}
+      />
+    )
+  } catch (err) {
+    console.error('[DashboardCockpitLoader]', err)
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16 text-center">
+        <p className="text-lg font-bold text-foreground">Chargement interrompu</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Réessayez dans un instant — si le problème continue, vérifiez la connexion puis actualisez la page.
+        </p>
+        <Button asChild className="mt-8" size="lg">
+          <Link href="/dashboard">Actualiser le tableau de bord</Link>
+        </Button>
+      </div>
+    )
+  }
 }
 
 export default async function DashboardPage() {

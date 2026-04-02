@@ -38,12 +38,21 @@ export type CockpitQuizRow = {
   description: string | null
   level: string | null
   theme: string | null
+  isPublic: boolean
   questionCount: number
   createdAtIso: string
   lastSessionLabel: string | null
 }
 
 type LevelFilter = 'all' | 'beginner' | 'intermediate' | 'advanced'
+
+type VisibilityFilter = 'all' | 'public' | 'private'
+
+const VISIBILITY_CHIPS: { value: VisibilityFilter; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'public', label: 'Public' },
+  { value: 'private', label: 'Privé' },
+]
 
 const LEVEL_CHIPS: { value: LevelFilter; label: string }[] = [
   { value: 'all', label: 'Tous' },
