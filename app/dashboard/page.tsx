@@ -1,5 +1,8 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
+
+/** Vercel Pro / Enterprise : évite les 504 si les agrégations DB restent lourdes. */
+export const maxDuration = 60
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ThemeSwitcher } from '@/components/theme-switcher'
@@ -12,7 +15,14 @@ import {
 } from './dashboard-cockpit-view'
 import type { CockpitQuizRow } from '@/components/dashboard/dashboard-quiz-cockpit-grid'
 
-type QuizRowWithCount = {
+/** Colonnes nécessaires au cockpit (évite select * + embed count, source de timeouts Vercel). */
+const QUIZ_COCKPIT_COLUMNS =
+  'id,title,description,level,theme,created_at,is_public' as const
+
+const MAX_QUIZZES_DASHBOARD = 150
+const MAX_SESSIONS_DASHBOARD = 50
+
+type QuizRowLite = {
   id: string
   title: string
   description: string | null
@@ -20,7 +30,6 @@ type QuizRowWithCount = {
   theme: string | null
   created_at: string
   is_public?: boolean | null
-  questions?: { count: number }[] | null
 }
 
 type SessionLite = {
@@ -98,42 +107,59 @@ async function DashboardCockpitLoader({ userId, userEmail }: { userId: string; u
     supabase.from('profiles').select('display_name,email').eq('id', userId).single(),
     supabase
       .from('quizzes')
-      .select('*, questions(count)')
+      .select(QUIZ_COCKPIT_COLUMNS)
       .eq('user_id', userId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(MAX_QUIZZES_DASHBOARD),
     supabase
       .from('sessions')
       .select('id, created_at, status, quiz_id, pin_code')
       .eq('host_id', userId)
       .order('created_at', { ascending: false })
-      .limit(50),
+      .limit(MAX_SESSIONS_DASHBOARD),
   ])
 
   const profile = profileRes.data
-  const quizzes = (quizzesRes.data ?? []) as QuizRowWithCount[]
+  const quizzes = (quizzesRes.data ?? []) as QuizRowLite[]
   const sessionsRaw = (sessionsRes.data ?? []) as SessionLite[]
 
   const sessionIds = sessionsRaw.map((s) => s.id)
-  let studentsCount = 0
-  if (sessionIds.length > 0) {
-    const { count } = await supabase
-      .from('participants')
-      .select('*', { count: 'exact', head: true })
-      .in('session_id', sessionIds)
-    studentsCount = count ?? 0
+  const quizIds = quizzes.map((q) => q.id)
+
+  const sortedSessions = [...sessionsRaw].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
+  const recentThree = sortedSessions.slice(0, 3)
+  const recentIds = recentThree.map((s) => s.id)
+
+  const [participantsCountRes, recentParticipantsRes, questionIdsRes] = await Promise.all([
+    sessionIds.length > 0
+      ? supabase
+          .from('participants')
+          .select('id', { count: 'exact', head: true })
+          .in('session_id', sessionIds)
+      : Promise.resolve({ count: 0 as number | null }),
+    recentIds.length > 0
+      ? supabase.from('participants').select('session_id').in('session_id', recentIds)
+      : Promise.resolve({ data: [] as { session_id: string }[] }),
+    quizIds.length > 0
+      ? supabase.from('questions').select('quiz_id').in('quiz_id', quizIds)
+      : Promise.resolve({ data: [] as { quiz_id: string }[] }),
+  ])
+
+  const studentsCount = participantsCountRes.count ?? 0
+
+  const questionCountByQuizId = new Map<string, number>()
+  for (const row of questionIdsRes.data ?? []) {
+    const qid = row.quiz_id
+    questionCountByQuizId.set(qid, (questionCountByQuizId.get(qid) ?? 0) + 1)
   }
 
-  const totalQuestions = quizzes.reduce((acc, q) => {
-    const c = q.questions?.[0]?.count
-    return acc + (typeof c === 'number' ? c : 0)
-  }, 0)
+  const totalQuestions = Array.from(questionCountByQuizId.values()).reduce((a, b) => a + b, 0)
 
   const quizTitleById = new Map(quizzes.map((q) => [q.id, q.title]))
 
   const lastSessionByQuizId = new Map<string, string>()
-  const sortedSessions = [...sessionsRaw].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  )
   for (const s of sortedSessions) {
     if (!lastSessionByQuizId.has(s.quiz_id)) {
       lastSessionByQuizId.set(s.quiz_id, s.created_at)
@@ -149,21 +175,16 @@ async function DashboardCockpitLoader({ userId, userEmail }: { userId: string; u
       level: q.level,
       theme: q.theme,
       isPublic: Boolean(q.is_public),
-      questionCount: typeof q.questions?.[0]?.count === 'number' ? q.questions[0].count : 0,
+      questionCount: questionCountByQuizId.get(q.id) ?? 0,
       createdAtIso: q.created_at,
       lastSessionLabel: lastIso ? formatShortDate(lastIso) : null,
     }
   })
 
-  const recentThree = sortedSessions.slice(0, 3)
-  const recentIds = recentThree.map((s) => s.id)
   const participantCountBySession = new Map<string, number>()
-  if (recentIds.length > 0) {
-    const { data: partRows } = await supabase.from('participants').select('session_id').in('session_id', recentIds)
-    for (const row of partRows ?? []) {
-      const sid = (row as { session_id: string }).session_id
-      participantCountBySession.set(sid, (participantCountBySession.get(sid) ?? 0) + 1)
-    }
+  for (const row of recentParticipantsRes.data ?? []) {
+    const sid = row.session_id
+    participantCountBySession.set(sid, (participantCountBySession.get(sid) ?? 0) + 1)
   }
 
   const recentSessions: RecentSessionItem[] = recentThree.map((s) => {

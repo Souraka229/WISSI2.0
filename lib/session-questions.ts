@@ -6,14 +6,25 @@ export type SessionRow = {
   game_mode?: string | null
 }
 
+/** Colonnes minimales pour l’UI joueur (évite un `select *` lourd au chargement). */
+export const SESSION_QUESTION_COLUMNS_STUDENT =
+  'id,question_text,question_type,correct_answer,options,time_limit,order_index,points'
+
+export type FetchMergedSessionQuestionsOptions = {
+  /** Par défaut `*` (animateur / édition). Utiliser SESSION_QUESTION_COLUMNS_STUDENT côté élève. */
+  columns?: string
+}
+
 /** Liste linéaire des questions : quiz principal puis second défi (mode prof_dual). */
 export async function fetchMergedSessionQuestions(
   supabase: SupabaseClient,
   session: SessionRow,
+  options?: FetchMergedSessionQuestionsOptions,
 ) {
+  const columns = options?.columns ?? '*'
   const { data: primary, error: e1 } = await supabase
     .from('questions')
-    .select('*')
+    .select(columns)
     .eq('quiz_id', session.quiz_id)
     .order('order_index', { ascending: true })
 
@@ -23,7 +34,7 @@ export async function fetchMergedSessionQuestions(
   if (session.secondary_quiz_id && session.game_mode === 'prof_dual') {
     const { data: secondary, error: e2 } = await supabase
       .from('questions')
-      .select('*')
+      .select(columns)
       .eq('quiz_id', session.secondary_quiz_id)
       .order('order_index', { ascending: true })
 

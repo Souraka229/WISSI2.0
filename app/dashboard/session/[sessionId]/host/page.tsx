@@ -347,6 +347,10 @@ export default function HostSessionPage() {
       if (cancelled || !data) return
       const next = data as Record<string, unknown>
       setSession((prev) => (sessionLiveFieldsChanged(prev, next) ? next : prev))
+      // Secours si Realtime « participants » n’est pas publié : liste à jour toutes les 4 s en salle d’attente.
+      if (String(next.status ?? '') === 'waiting') {
+        void loadLeaderboard()
+      }
     }, 4000)
 
     return () => {

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   fetchMergedSessionQuestions,
+  SESSION_QUESTION_COLUMNS_STUDENT,
   sessionLiveFieldsChanged,
 } from '@/lib/session-questions'
 import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
@@ -114,19 +115,40 @@ export default function StudentPlayerPage() {
           .eq('id', sessionId)
           .single()
 
-        if (se || !sessionData || cancelled) return
-
-        const merged = await fetchMergedSessionQuestions(supabase, {
-          quiz_id: sessionData.quiz_id,
-          secondary_quiz_id: sessionData.secondary_quiz_id ?? null,
-          game_mode: sessionData.game_mode,
-        })
-
         if (cancelled) return
+        if (se || !sessionData) {
+          return
+        }
+
         setSession(sessionData as Record<string, unknown>)
-        setQuestions(merged as QuestionRow[])
-        await refreshMe()
-        await refreshLeaderboard()
+
+        const row = sessionData as {
+          status?: string
+          quiz_id: string
+          secondary_quiz_id?: string | null
+          game_mode?: string | null
+        }
+
+        const isWaiting = String(row.status ?? '') === 'waiting'
+
+        if (isWaiting) {
+          setQuestions([])
+          await Promise.all([refreshMe(), refreshLeaderboard()])
+          return
+        }
+
+        const merged = await fetchMergedSessionQuestions(
+          supabase,
+          {
+            quiz_id: row.quiz_id,
+            secondary_quiz_id: row.secondary_quiz_id ?? null,
+            game_mode: row.game_mode,
+          },
+          { columns: SESSION_QUESTION_COLUMNS_STUDENT },
+        )
+        if (cancelled) return
+        setQuestions(merged as unknown as QuestionRow[])
+        await Promise.all([refreshMe(), refreshLeaderboard()])
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -255,6 +277,52 @@ export default function StudentPlayerPage() {
   const status = session ? String(session.status) : ''
   const qIndex = session ? Number(session.current_question_index ?? 0) : 0
   const currentQuestion = questions[qIndex]
+
+  /** Quand on quitte la salle d’attente : charger les questions (pas au premier chargement si waiting). */
+  const quizIdForLoad =
+    session && session.quiz_id != null ? String(session.quiz_id) : ''
+  const secondaryQuizIdForLoad =
+    session && session.secondary_quiz_id != null
+      ? String(session.secondary_quiz_id)
+      : ''
+  const gameModeForLoad =
+    session && session.game_mode != null && String(session.game_mode).length > 0
+      ? String(session.game_mode)
+      : undefined
+
+  useEffect(() => {
+    if (!quizIdForLoad) return
+    if (status === 'waiting' || status === 'finished' || status === 'results') return
+    if (questions.length > 0) return
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const merged = await fetchMergedSessionQuestions(
+          supabase,
+          {
+            quiz_id: quizIdForLoad,
+            secondary_quiz_id: secondaryQuizIdForLoad || null,
+            game_mode: gameModeForLoad,
+          },
+          { columns: SESSION_QUESTION_COLUMNS_STUDENT },
+        )
+        if (!cancelled) setQuestions(merged as unknown as QuestionRow[])
+      } catch (e) {
+        console.error('[student] chargement questions (différé)', e)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    supabase,
+    quizIdForLoad,
+    secondaryQuizIdForLoad,
+    gameModeForLoad,
+    status,
+    questions.length,
+  ])
 
   useEffect(() => {
     if (status === 'results' && !resultsBaselineLockedRef.current) {
