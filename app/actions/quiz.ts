@@ -369,6 +369,54 @@ export type HostControlAction =
   | 'timer_cut'
   | 'timer_subtract_10'
 
+export async function setSessionAutoAdvance(
+  sessionId: string,
+  enabled: boolean,
+): Promise<HostControlResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { ok: false, error: 'Non authentifié.' }
+  }
+
+  const { data: sess, error: sErr } = await supabase
+    .from('sessions')
+    .select('host_id')
+    .eq('id', sessionId)
+    .single()
+
+  if (sErr || !sess || sess.host_id !== user.id) {
+    return { ok: false, error: 'Vous n’êtes pas l’animateur de cette session.' }
+  }
+
+  const { error } = await supabase
+    .from('sessions')
+    .update({ auto_advance: enabled })
+    .eq('id', sessionId)
+
+  if (error) {
+    console.error('[setSessionAutoAdvance]', error)
+    if (
+      error.message?.includes('auto_advance') ||
+      error.message?.includes('column') ||
+      error.code === '42703'
+    ) {
+      return {
+        ok: false,
+        error:
+          'Colonne auto_advance absente : exécutez scripts/006_session_auto_advance.sql sur Supabase.',
+      }
+    }
+    return { ok: false, error: 'Impossible d’enregistrer l’option.' }
+  }
+
+  revalidateTag(`session-${sessionId}`)
+  return { ok: true }
+}
+
 /**
  * Ne pas utiliser `throw` pour les erreurs métier : en production Next.js remplace le message
  * par « An error occurred in the Server Components render… » sur le client.

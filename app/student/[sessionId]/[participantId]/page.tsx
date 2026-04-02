@@ -16,11 +16,13 @@ import {
   Loader2,
   Trophy,
   Users,
-  Zap,
   CheckCircle2,
   Clock,
   Flame,
   Sparkles,
+  ArrowUp,
+  ArrowDown,
+  Minus,
 } from 'lucide-react'
 
 type ParticipantRow = {
@@ -72,6 +74,10 @@ export default function StudentPlayerPage() {
   >('connecting')
   const questionKeyRef = useRef<string>('')
   const questionsRef = useRef<QuestionRow[]>([])
+  /** Rangs au début de la question courante (avant les points de cette question). */
+  const questionStartRanksRef = useRef<Map<string, number>>(new Map())
+  const resultsCompareBaselineRef = useRef<Map<string, number>>(new Map())
+  const resultsBaselineLockedRef = useRef(false)
 
   useEffect(() => {
     questionsRef.current = questions
@@ -250,12 +256,48 @@ export default function StudentPlayerPage() {
   const qIndex = session ? Number(session.current_question_index ?? 0) : 0
   const currentQuestion = questions[qIndex]
 
-  const handleSubmitAnswer = useCallback(
-    async (fromTimeout = false) => {
+  useEffect(() => {
+    if (status === 'results' && !resultsBaselineLockedRef.current) {
+      resultsCompareBaselineRef.current = new Map(questionStartRanksRef.current)
+      resultsBaselineLockedRef.current = true
+    }
+    if (status === 'question') {
+      resultsBaselineLockedRef.current = false
+    }
+  }, [status])
+
+  /** Instantané des rangs au lancement de chaque question (pour flèches ↑↓ au classement). */
+  useEffect(() => {
+    if (status !== 'question' || !currentQuestion) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { all } = await getSessionLeaderboard(sessionId)
+        if (cancelled) return
+        questionStartRanksRef.current = new Map(all.map((p, i) => [p.id, i + 1]))
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [status, qIndex, currentQuestion?.id, sessionId])
+
+  const submitAnswerNow = useCallback(
+    async (fromTimeout: boolean, choiceOverride?: string | null) => {
       if (!currentQuestion || answered || status !== 'question') return
 
+      const choice = fromTimeout
+        ? null
+        : choiceOverride !== undefined
+          ? choiceOverride
+          : selectedAnswer
+
+      if (!fromTimeout && (choice === null || choice === '')) return
+
+      if (!fromTimeout && choice !== null) setSelectedAnswer(choice)
       setAnswered(true)
-      const choice = fromTimeout ? null : selectedAnswer
       const isCorrect =
         choice !== null && String(choice) === String(currentQuestion.correct_answer)
       const startedRaw = session?.question_started_at
@@ -344,18 +386,6 @@ export default function StudentPlayerPage() {
   ])
 
   useEffect(() => {
-    if (status !== 'question' || answered || selectedAnswer === null) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        void handleSubmitAnswer(false)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [status, answered, selectedAnswer, handleSubmitAnswer])
-
-  useEffect(() => {
     if (status !== 'question' || answered || !currentQuestion) return
 
     const dRaw = session?.question_deadline_at
@@ -386,8 +416,8 @@ export default function StudentPlayerPage() {
   useEffect(() => {
     if (status !== 'question' || answered || !currentQuestion) return
     if (timeLeft !== 0) return
-    void handleSubmitAnswer(true)
-  }, [timeLeft, status, answered, currentQuestion, handleSubmitAnswer])
+    void submitAnswerNow(true)
+  }, [timeLeft, status, answered, currentQuestion, submitAnswerNow])
 
   useEffect(() => {
     if (status === 'results') {
@@ -395,6 +425,12 @@ export default function StudentPlayerPage() {
       void refreshMe()
     }
   }, [status, refreshLeaderboard, refreshMe])
+
+  useEffect(() => {
+    if (status !== 'results') return
+    const t = window.setInterval(() => void refreshLeaderboard(), 2500)
+    return () => window.clearInterval(t)
+  }, [status, refreshLeaderboard])
 
   const liveRealtimeBadge = (
     <div
@@ -519,6 +555,9 @@ export default function StudentPlayerPage() {
             <div>
               <p className="text-xs font-medium text-muted-foreground">Temps réel</p>
               <p className="text-lg font-black">TOP 5</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                ↑ ↓ = évolution du rang après la question
+              </p>
             </div>
           </div>
           {liveRealtimeBadge}
@@ -535,6 +574,11 @@ export default function StudentPlayerPage() {
             const medal =
               row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : null
             const isMe = row.id === participantId
+            const pid = row.id
+            const prevRank =
+              pid != null ? resultsCompareBaselineRef.current.get(pid) : undefined
+            const rankDelta =
+              prevRank !== undefined ? prevRank - row.rank : 0
             const base =
               row.rank === 1
                 ? 'border-amber-400/50 bg-amber-500/10'
@@ -545,20 +589,50 @@ export default function StudentPlayerPage() {
                     : 'border-border bg-card'
             return (
               <li
-                key={row.rank + row.nickname}
-                className={`flex animate-in fade-in slide-in-from-left-2 items-center justify-between rounded-2xl border-2 px-4 py-3 duration-300 ${base} ${
+                key={row.id ?? `${row.rank}-${row.nickname}`}
+                className={`flex animate-in fade-in slide-in-from-left-2 items-center justify-between gap-2 rounded-2xl border-2 px-4 py-3 duration-300 ${base} ${
                   isMe ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]' : ''
                 }`}
                 style={{ animationDelay: `${i * 70}ms` }}
               >
-                <span className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center text-lg font-bold">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center text-lg font-bold">
                     {medal ?? <span className="text-sm text-muted-foreground">#{row.rank}</span>}
                   </span>
-                  <span className={`font-medium ${isMe ? 'text-primary' : ''}`}>{row.nickname}</span>
+                  <span className={`min-w-0 truncate font-medium ${isMe ? 'text-primary' : ''}`}>
+                    {row.nickname}
+                  </span>
                 </span>
-                <span className="shrink-0 text-sm font-bold tabular-nums">
-                  {row.score} pts · Nv.{row.level}
+                <span className="flex shrink-0 items-center gap-2">
+                  {prevRank !== undefined && (
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                        rankDelta > 0
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                          : rankDelta < 0
+                            ? 'bg-destructive/15 text-destructive'
+                            : 'bg-muted text-muted-foreground'
+                      }`}
+                      title={
+                        rankDelta > 0
+                          ? `Monte de ${rankDelta} place(s)`
+                          : rankDelta < 0
+                            ? `Descend de ${-rankDelta} place(s)`
+                            : 'Rang inchangé'
+                      }
+                    >
+                      {rankDelta > 0 ? (
+                        <ArrowUp className="h-4 w-4" aria-hidden />
+                      ) : rankDelta < 0 ? (
+                        <ArrowDown className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <Minus className="h-4 w-4" aria-hidden />
+                      )}
+                    </span>
+                  )}
+                  <span className="text-right text-sm font-bold tabular-nums">
+                    {row.score} pts · Nv.{row.level}
+                  </span>
                 </span>
               </li>
             )
@@ -566,7 +640,7 @@ export default function StudentPlayerPage() {
         </ol>
 
         <div className="mx-auto mt-10 max-w-lg rounded-xl border border-dashed border-primary/25 bg-primary/5 p-4 text-center text-sm text-muted-foreground">
-          L’animateur envoie la prochaine question quand c’est bon pour la classe.
+          La suite est lancée par l’animateur ou en défilement automatique.
         </div>
 
         <div className="pointer-events-none fixed bottom-4 left-0 right-0 flex flex-wrap justify-center gap-2 px-4">
@@ -682,7 +756,9 @@ export default function StudentPlayerPage() {
                       key={idx}
                       type="button"
                       disabled={!canInteract}
-                      onClick={() => canInteract && setSelectedAnswer(String(idx))}
+                      onClick={() =>
+                        canInteract && void submitAnswerNow(false, String(idx))
+                      }
                       className={`flex min-h-[100px] flex-col justify-center px-4 py-4 text-left ${liveMcqTileClass(idx, {
                         isSelected: isSel,
                         answered,
@@ -709,7 +785,9 @@ export default function StudentPlayerPage() {
                       key={label}
                       type="button"
                       disabled={!canInteract}
-                      onClick={() => canInteract && setSelectedAnswer(String(idx))}
+                      onClick={() =>
+                        canInteract && void submitAnswerNow(false, String(idx))
+                      }
                       className={`flex min-h-[120px] items-center justify-center px-4 py-6 text-center text-xl font-black ${liveMcqTileClass(idx, {
                         isSelected: isSel,
                         answered,
@@ -725,20 +803,10 @@ export default function StudentPlayerPage() {
 
             <div className="mt-6 space-y-4">
               {!answered ? (
-                <>
-                  <Button
-                    className="h-12 w-full gap-2 text-base font-bold shadow-md"
-                    disabled={selectedAnswer === null || timeLeft <= 0}
-                    onClick={() => void handleSubmitAnswer(false)}
-                  >
-                    <Zap className="h-5 w-5" />
-                    Valider ma réponse
-                  </Button>
-                  <p className="text-center text-xs text-muted-foreground">
-                    Un seul envoi après choix — le temps est synchronisé avec l’animateur (Entrée pour
-                    valider).
-                  </p>
-                </>
+                <p className="text-center text-xs text-muted-foreground">
+                  Touchez une réponse colorée : elle est envoyée tout de suite (un seul choix par
+                  question).
+                </p>
               ) : (
                 <div className="space-y-3">
                   {answerFeedback && (

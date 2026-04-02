@@ -8,6 +8,7 @@ import {
   hostControlSession,
   getSessionLeaderboard,
   getHostQuestionLiveOverview,
+  setSessionAutoAdvance,
   type HostControlAction,
   type HostQuestionLiveRow,
 } from '@/app/actions/quiz'
@@ -16,6 +17,7 @@ import {
   sessionLiveFieldsChanged,
 } from '@/lib/session-questions'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { JoinQrCode } from '@/components/join-qr-code'
 import {
   ArrowLeft,
@@ -30,7 +32,12 @@ import {
   Timer,
   Minus,
   ClipboardList,
+  FastForward,
 } from 'lucide-react'
+
+/** Après la fin du chrono → afficher le classement ; puis durée affichage avant question suivante. */
+const AUTO_SHOW_LEADERBOARD_MS = 2200
+const AUTO_NEXT_QUESTION_MS = 6500
 
 const STATUS_FR: Record<string, string> = {
   waiting: 'Salle d’attente',
@@ -66,6 +73,10 @@ export default function HostSessionPage() {
   const [questionOverview, setQuestionOverview] = useState<
     HostQuestionLiveRow[] | null
   >(null)
+  const [autoAdvancePending, setAutoAdvancePending] = useState(false)
+  const autoShowLeaderboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
 
   const sessionRef = useRef<Record<string, unknown> | null>(null)
   const questionsRef = useRef<
@@ -105,6 +116,78 @@ export default function HostSessionPage() {
       /* ignore */
     }
   }, [sessionId])
+
+  /** Commandes déclenchées par le timer (sans bloquer tout le pupitre). */
+  const runSilent = useCallback(
+    async (action: HostControlAction) => {
+      try {
+        const result = await hostControlSession(sessionId, action)
+        if (!result.ok) {
+          setError(result.error)
+          return
+        }
+        await loadLeaderboard()
+      } catch (e) {
+        console.error(e)
+        setError('Une étape automatique a échoué — repassez en manuel ou rafraîchissez.')
+      }
+    },
+    [sessionId, loadLeaderboard],
+  )
+
+  useEffect(() => {
+    if (!session || !Boolean(session.auto_advance)) return
+    const st = String(session.status)
+    if (st !== 'question') return
+
+    const deadlineRaw = session.question_deadline_at
+    if (typeof deadlineRaw !== 'string' || !deadlineRaw) return
+
+    const deadlineMs = new Date(deadlineRaw).getTime()
+    if (Number.isNaN(deadlineMs)) return
+
+    const tick = () => {
+      if (!Boolean(sessionRef.current?.auto_advance)) return
+      if (String(sessionRef.current?.status) !== 'question') return
+      if (Date.now() < deadlineMs) return
+      if (autoShowLeaderboardTimerRef.current != null) return
+
+      autoShowLeaderboardTimerRef.current = setTimeout(() => {
+        autoShowLeaderboardTimerRef.current = null
+        if (String(sessionRef.current?.status) !== 'question') return
+        void runSilent('show_leaderboard')
+      }, AUTO_SHOW_LEADERBOARD_MS)
+    }
+
+    const id = window.setInterval(tick, 400)
+    tick()
+    return () => {
+      window.clearInterval(id)
+      if (autoShowLeaderboardTimerRef.current != null) {
+        window.clearTimeout(autoShowLeaderboardTimerRef.current)
+        autoShowLeaderboardTimerRef.current = null
+      }
+    }
+  }, [
+    session?.auto_advance,
+    session?.status,
+    session?.current_question_index,
+    session?.question_deadline_at,
+    runSilent,
+  ])
+
+  useEffect(() => {
+    if (!session || !Boolean(session.auto_advance)) return
+    if (String(session.status) !== 'results') return
+
+    const t = window.setTimeout(() => {
+      if (String(sessionRef.current?.status) !== 'results') return
+      if (!Boolean(sessionRef.current?.auto_advance)) return
+      void runSilent('next_question')
+    }, AUTO_NEXT_QUESTION_MS)
+
+    return () => window.clearTimeout(t)
+  }, [session?.auto_advance, session?.status, session?.current_question_index, runSilent])
 
   useEffect(() => {
     if (String(session?.status ?? '') !== 'question') {
@@ -281,6 +364,28 @@ export default function HostSessionPage() {
     }
   }, [session?.status, loadLeaderboard])
 
+  const onAutoAdvanceChange = async (checked: boolean) => {
+    setAutoAdvancePending(true)
+    setError(null)
+    try {
+      const r = await setSessionAutoAdvance(sessionId, checked)
+      if (!r.ok) {
+        setError(r.error)
+        return
+      }
+      setSession((prev) =>
+        prev ? { ...prev, auto_advance: checked } : prev,
+      )
+      showHint(
+        checked
+          ? 'Défilement auto : classement puis question suivante.'
+          : 'Défilement automatique désactivé.',
+      )
+    } finally {
+      setAutoAdvancePending(false)
+    }
+  }
+
   const run = async (action: HostControlAction) => {
     setBusy(true)
     setError(null)
@@ -415,6 +520,34 @@ export default function HostSessionPage() {
             </div>
           </div>
         </section>
+
+        {status !== 'finished' && (
+          <section className="flex flex-col gap-3 rounded-2xl border border-violet-500/25 bg-violet-500/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/15 text-violet-700 dark:text-violet-300">
+                <FastForward className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Défilement automatique</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Après la fin du chrono : affichage du TOP 5 (~{(AUTO_SHOW_LEADERBOARD_MS / 1000).toFixed(1)}s), puis
+                  question suivante (~{(AUTO_NEXT_QUESTION_MS / 1000).toFixed(1)}s). Le pupitre doit rester ouvert.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 sm:shrink-0">
+              <span className="text-sm font-medium text-muted-foreground">
+                {Boolean(session.auto_advance) ? 'Activé' : 'Désactivé'}
+              </span>
+              <Switch
+                checked={Boolean(session.auto_advance)}
+                disabled={autoAdvancePending}
+                onCheckedChange={(v) => void onAutoAdvanceChange(v)}
+                aria-label="Activer le défilement automatique"
+              />
+            </div>
+          </section>
+        )}
 
         {(status === 'question' || status === 'results') && currentQ && (
           <section className="rounded-2xl border border-primary/25 bg-card p-5 shadow-md ring-1 ring-primary/10">
@@ -552,8 +685,12 @@ export default function HostSessionPage() {
         {status === 'question' && (
           <div className="space-y-3">
             <p className="text-center text-xs text-muted-foreground">
-              Chrono synchronisé avec les élèves : vous pouvez le raccourcir ou le couper avant
-              d’afficher le classement.
+              Chrono synchronisé avec les élèves : vous pouvez le raccourcir ou le couper avant le classement.
+              {Boolean(session.auto_advance) && (
+                <span className="mt-1 block font-medium text-violet-700 dark:text-violet-300">
+                  Défilement auto : le classement s’affichera sans clic après la fin du temps.
+                </span>
+              )}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button
@@ -601,7 +738,9 @@ export default function HostSessionPage() {
         {status === 'results' && (
           <div className="space-y-2">
             <p className="text-center text-xs text-muted-foreground">
-              Les joueurs voient le classement. Passez à la suite quand vous voulez.
+              {Boolean(session.auto_advance)
+                ? 'Défilement auto : passage à la question suivante dans quelques secondes (ou utilisez le bouton).'
+                : 'Les joueurs voient le classement. Passez à la suite quand vous voulez.'}
             </p>
             <Button
               className="h-12 w-full gap-2 font-semibold"

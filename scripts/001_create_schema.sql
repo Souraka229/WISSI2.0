@@ -110,6 +110,7 @@ create table if not exists public.sessions (
   ended_at timestamptz,
   question_started_at timestamptz,
   question_deadline_at timestamptz,
+  auto_advance boolean not null default false,
   created_at timestamptz default now()
 );
 
