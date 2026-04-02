@@ -256,83 +256,141 @@ export async function updateSessionStatus(
   return data
 }
 
+export type HostControlResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Ne pas utiliser `throw` pour les erreurs métier : en production Next.js remplace le message
+ * par « An error occurred in the Server Components render… » sur le client.
+ */
 export async function hostControlSession(
   sessionId: string,
   action: 'start' | 'show_leaderboard' | 'next_question' | 'end',
-) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+): Promise<HostControlResult> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) throw new Error('Non authentifié')
-
-  const { data: session, error } = await supabase
-    .from('sessions')
-    .select('*')
-    .eq('id', sessionId)
-    .single()
-
-  if (error || !session) throw new Error('Session introuvable')
-  if (session.host_id !== user.id) throw new Error('Accès refusé')
-
-  const total = await countSessionQuestions(supabase, session)
-
-  if (total === 0) throw new Error('Aucune question dans cette session')
-
-  const patch = async (fields: Record<string, unknown>) => {
-    const { error: uErr } = await supabase
-      .from('sessions')
-      .update(fields)
-      .eq('id', sessionId)
-    if (uErr) throw uErr
-    revalidateTag(`session-${sessionId}`)
-  }
-
-  switch (action) {
-    case 'start': {
-      if (!['waiting'].includes(session.status)) {
-        throw new Error('La partie est déjà lancée')
+    if (!user) {
+      return {
+        ok: false,
+        error: 'Non authentifié — reconnectez-vous puis rouvrez le pupitre depuis le tableau de bord.',
       }
-      await patch({
-        status: 'question',
-        current_question_index: 0,
-        started_at: new Date().toISOString(),
-      })
-      break
     }
-    case 'show_leaderboard': {
-      await patch({ status: 'results' })
-      break
+
+    const { data: session, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single()
+
+    if (error || !session) {
+      return { ok: false, error: 'Session introuvable ou vous n’y avez pas accès.' }
     }
-    case 'next_question': {
-      const idx = session.current_question_index ?? 0
-      const nextIdx = idx + 1
-      if (nextIdx >= total) {
-        await patch({
+    if (session.host_id !== user.id) {
+      return { ok: false, error: 'Vous n’êtes pas l’animateur de cette session.' }
+    }
+
+    let total: number
+    try {
+      total = await countSessionQuestions(supabase, session)
+    } catch (e) {
+      console.error('[hostControlSession] countSessionQuestions', e)
+      return {
+        ok: false,
+        error:
+          'Impossible de charger les questions du quiz (second quiz manquant, RLS ou migration 002). Vérifiez le mode « Défis du prof » et la base Supabase.',
+      }
+    }
+
+    if (total === 0) {
+      return { ok: false, error: 'Aucune question dans cette session.' }
+    }
+
+    const patch = async (
+      fields: Record<string, unknown>,
+    ): Promise<string | null> => {
+      const { error: uErr } = await supabase
+        .from('sessions')
+        .update(fields)
+        .eq('id', sessionId)
+      if (uErr) {
+        console.error('[hostControlSession] update', uErr)
+        if (
+          uErr.code === '23514' ||
+          uErr.message?.includes('sessions_status_check')
+        ) {
+          return 'Statut incompatible — exécutez scripts/002_live_game_modes.sql sur Supabase (contrainte sur sessions.status).'
+        }
+        if (uErr.code === '42501') {
+          return 'Mise à jour refusée par la base (politique RLS sur sessions).'
+        }
+        return 'La base a refusé la mise à jour. Détail dans les logs serveur.'
+      }
+      revalidateTag(`session-${sessionId}`)
+      return null
+    }
+
+    const st = String(session.status)
+
+    switch (action) {
+      case 'start': {
+        if (st !== 'waiting') {
+          return { ok: false, error: 'La partie est déjà lancée ou terminée.' }
+        }
+        const err = await patch({
+          status: 'question',
+          current_question_index: 0,
+          started_at: new Date().toISOString(),
+        })
+        if (err) return { ok: false, error: err }
+        break
+      }
+      case 'show_leaderboard': {
+        const err = await patch({ status: 'results' })
+        if (err) return { ok: false, error: err }
+        break
+      }
+      case 'next_question': {
+        const idx = session.current_question_index ?? 0
+        const nextIdx = idx + 1
+        if (nextIdx >= total) {
+          const err = await patch({
+            status: 'finished',
+            ended_at: new Date().toISOString(),
+          })
+          if (err) return { ok: false, error: err }
+        } else {
+          const err = await patch({
+            status: 'question',
+            current_question_index: nextIdx,
+          })
+          if (err) return { ok: false, error: err }
+        }
+        break
+      }
+      case 'end': {
+        const err = await patch({
           status: 'finished',
           ended_at: new Date().toISOString(),
         })
-      } else {
-        await patch({
-          status: 'question',
-          current_question_index: nextIdx,
-        })
+        if (err) return { ok: false, error: err }
+        break
       }
-      break
+      default:
+        return { ok: false, error: 'Action inconnue.' }
     }
-    case 'end': {
-      await patch({
-        status: 'finished',
-        ended_at: new Date().toISOString(),
-      })
-      break
-    }
-    default:
-      throw new Error('Action inconnue')
-  }
 
-  return { ok: true as const }
+    return { ok: true }
+  } catch (e) {
+    console.error('[hostControlSession] unexpected', e)
+    return {
+      ok: false,
+      error:
+        'Erreur serveur. En local, lancez npm run dev pour voir le détail ; en prod, consultez les logs Vercel.',
+    }
+  }
 }
 
 /** Classement pour l’affichage joueur (anonyme autorisé par RLS). */

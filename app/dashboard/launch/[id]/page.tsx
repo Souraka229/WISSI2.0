@@ -124,12 +124,26 @@ export default function LaunchPage() {
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-2xl">
           {!session ? (
-            <div className="bg-card border border-border rounded-2xl p-12 text-center">
-              <div className="w-20 h-20 bg-primary/15 rounded-full flex items-center justify-center mx-auto mb-8">
-                <Play className="w-10 h-10 text-primary" />
+            <div className="rounded-2xl border border-border bg-card p-12 text-center">
+              {!(quiz.questions?.length ?? 0) && (
+                <div className="mb-8 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 p-5 text-left">
+                  <p className="font-bold text-amber-900 dark:text-amber-100">
+                    Ce quiz n’a encore aucune question
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Ajoutez des questions depuis l’éditeur (SuperPrompt, import JSON ou saisie manuelle),
+                    puis revenez ici.
+                  </p>
+                  <Button className="mt-4" variant="secondary" asChild>
+                    <Link href={`/dashboard/quiz/${quizId}`}>Ouvrir l’éditeur du quiz</Link>
+                  </Button>
+                </div>
+              )}
+              <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full bg-primary/15">
+                <Play className="h-10 w-10 text-primary" />
               </div>
 
-              <h2 className="text-3xl font-bold text-foreground mb-4">Prêt à lancer ?</h2>
+              <h2 className="mb-4 text-3xl font-bold text-foreground">Prêt à lancer ?</h2>
 
               <div className="bg-muted/50 rounded-lg p-8 mb-8 text-left">
                 <h3 className="font-semibold text-foreground mb-4">Détails du quiz</h3>

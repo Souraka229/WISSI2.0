@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
-import { ThemeSwitcher } from '@/components/theme-switcher'
-import { ArrowRight, ArrowLeft } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { ScitiQuizAuthShell } from '@/components/auth/sciti-quiz-auth-shell'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
@@ -44,90 +44,80 @@ function LoginForm() {
   }
 
   return (
-    <div className="relative min-h-screen bg-background flex flex-col">
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeSwitcher />
-      </div>
-      {/* Back Link */}
-      <div className="p-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Retour à l&apos;accueil
-        </Link>
-      </div>
+    <ScitiQuizAuthShell>
+      <div className="rounded-2xl border border-border bg-card/80 p-8 shadow-xl shadow-violet-500/5 backdrop-blur-sm dark:bg-card/50">
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+          Espace animateur
+        </p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground">Connexion</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Accédez à votre tableau de bord pour créer des quiz et lancer des sessions en direct.
+        </p>
 
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-              <span className="text-background font-bold text-sm">Q</span>
-            </div>
-            <span className="text-lg font-semibold">QuizLive</span>
+        <form onSubmit={handleLogin} className="mt-8 space-y-5">
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-semibold text-foreground">
+              Email
+            </label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="vous@exemple.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
+              className="h-12 rounded-xl border-border bg-background text-base"
+              autoComplete="email"
+            />
           </div>
 
-          {/* Form */}
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Connexion</h1>
-            <p className="text-muted-foreground mb-8">Accédez à votre tableau de bord</p>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="vous@exemple.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  className="bg-input border-border"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Mot de passe</label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Votre mot de passe"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="bg-input border-border"
-                />
-              </div>
-
-              {error && (
-                <div className="bg-destructive/15 border border-destructive/40 text-destructive text-sm p-3 rounded-lg">
-                  {error}
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={isLoading || !email || !password}
-                className="w-full bg-foreground text-background hover:bg-foreground/90 gap-2 h-11 mt-2"
-              >
-                {isLoading ? 'Connexion en cours...' : 'Se connecter'}
-                {!isLoading && <ArrowRight className="w-4 h-4" />}
-              </Button>
-            </form>
-
-            <div className="mt-8 pt-8 border-t border-border">
-              <p className="text-center text-sm text-muted-foreground">
-                Pas encore de compte ?{' '}
-                <Link href="/auth/sign-up" className="text-secondary hover:text-secondary/80 font-medium">
-                  Créer un compte
-                </Link>
-              </p>
-            </div>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-semibold text-foreground">
+              Mot de passe
+            </label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              className="h-12 rounded-xl border-border bg-background text-base"
+              autoComplete="current-password"
+            />
           </div>
+
+          {error && (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={isLoading || !email || !password}
+            className="h-12 w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-base font-bold text-white shadow-lg shadow-violet-500/25 transition hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50"
+          >
+            {isLoading ? 'Connexion…' : 'Se connecter'}
+            {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
+          </Button>
+        </form>
+
+        <div className="mt-8 border-t border-border pt-8">
+          <p className="text-center text-sm text-muted-foreground">
+            Pas encore de compte ?{' '}
+            <Link
+              href="/auth/sign-up"
+              className="font-bold text-violet-600 underline-offset-4 hover:underline dark:text-violet-400"
+            >
+              Créer un compte
+            </Link>
+          </p>
         </div>
       </div>
-    </div>
+    </ScitiQuizAuthShell>
   )
 }
 
@@ -135,7 +125,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground text-sm">
+        <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground text-sm">
           Chargement…
         </div>
       }

@@ -291,7 +291,7 @@ export default function JoinPage() {
             <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
               <span className="text-background font-bold text-sm">Q</span>
             </div>
-            <span className="text-lg font-semibold">QuizLive</span>
+            <span className="text-lg font-semibold">SCITI-Quiz</span>
           </div>
 
           <Suspense fallback={<LoadingFallback />}>

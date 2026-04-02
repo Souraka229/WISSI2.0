@@ -8,13 +8,15 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
-     * Feel free to modify this pattern to include more paths.
+     * Uniquement les zones qui ont besoin d’auth / refresh session.
+     * Évite un appel Supabase getUser() à chaque navigation sur /join, /student, etc.
+     * (sinon l’app paraît très lente en jeu live).
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/dashboard',
+    '/dashboard/:path*',
+    '/protected',
+    '/protected/:path*',
+    '/auth',
+    '/auth/:path*',
   ],
 }

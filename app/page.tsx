@@ -20,7 +20,7 @@ export default function LandingPage() {
               <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
                 <span className="text-background font-bold text-sm">Q</span>
               </div>
-              <span className="text-lg font-semibold tracking-tight">QuizLive</span>
+              <span className="text-lg font-semibold tracking-tight">SCITI-Quiz</span>
             </div>
 
             <div className="hidden md:flex items-center gap-8">
@@ -229,13 +229,13 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <p className="text-sm text-secondary font-medium mb-4">Témoignages</p>
             <h2 className="text-4xl font-bold tracking-tight">
-              Ils utilisent QuizLive au quotidien
+              Ils utilisent SCITI-Quiz au quotidien
             </h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             <TestimonialCard
-              quote="QuizLive a complètement transformé mes cours de mathématiques. Les étudiants sont enfin engagés et attentifs."
+              quote="SCITI-Quiz a complètement transformé mes cours de mathématiques. Les étudiants sont enfin engagés et attentifs."
               author="Marie Dupont"
               role="Professeure de Mathématiques"
               institution="Lycée Henri IV, Paris"
@@ -274,7 +274,7 @@ export default function LandingPage() {
               name="Gratuit"
               price="0€"
               period=""
-              description="Pour découvrir QuizLive"
+              description="Pour découvrir SCITI-Quiz"
               features={[
                 '3 quiz actifs',
                 '25 participants max',
@@ -328,7 +328,7 @@ export default function LandingPage() {
             Prêt à transformer vos cours ?
           </h2>
           <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            Rejoignez des milliers d&apos;enseignants qui utilisent QuizLive pour créer des expériences d&apos;apprentissage engageantes.
+            Rejoignez des milliers d&apos;enseignants qui utilisent SCITI-Quiz pour créer des expériences d&apos;apprentissage engageantes.
           </p>
           <Link href="/auth/sign-up">
             <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 gap-2 h-14 px-8 text-lg">
@@ -385,10 +385,10 @@ export default function LandingPage() {
               <div className="w-6 h-6 bg-foreground rounded flex items-center justify-center">
                 <span className="text-background font-bold text-xs">Q</span>
               </div>
-              <span className="font-semibold">QuizLive</span>
+              <span className="font-semibold">SCITI-Quiz</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 QuizLive. Tous droits réservés. Fait avec passion en France.
+              © {new Date().getFullYear()} SCITI-Quiz. Tous droits réservés.
             </p>
           </div>
         </div>

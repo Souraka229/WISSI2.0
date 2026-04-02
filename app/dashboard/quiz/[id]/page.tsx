@@ -10,8 +10,75 @@ import {
 import { buildSuperPromptForExternalChat } from '@/lib/superprompt-template'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, ArrowLeft, Loader2, Sparkles, Copy, ClipboardPaste } from 'lucide-react'
+import {
+  Plus,
+  ArrowLeft,
+  Loader2,
+  Sparkles,
+  Copy,
+  ClipboardPaste,
+  Play,
+  HelpCircle,
+} from 'lucide-react'
 import Link from 'next/link'
+
+/** Copie avec API Clipboard ; repli textarea + execCommand si navigateur / contexte HTTP bloque. */
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      /* repli */
+    }
+  }
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'fixed'
+  ta.style.left = '-9999px'
+  ta.style.top = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  ta.setSelectionRange(0, text.length)
+  const ok = document.execCommand('copy')
+  document.body.removeChild(ta)
+  if (!ok) {
+    throw new Error('execCommand copy failed')
+  }
+}
+
+function SuperPromptPreview({
+  quiz,
+  notes,
+  questionCount,
+}: {
+  quiz: { title: string; theme?: string | null } | null
+  notes: string
+  questionCount: number
+}) {
+  if (!quiz) return null
+  const text = buildSuperPromptForExternalChat({
+    quizTitle: quiz.title ?? 'Quiz',
+    quizTheme: quiz.theme,
+    notes,
+    questionCount,
+  })
+  return (
+    <details className="mt-2 rounded-lg border border-border bg-muted/20 p-3">
+      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        Aperçu du prompt (sélection + Ctrl+C si la copie automatique échoue)
+      </summary>
+      <textarea
+        readOnly
+        rows={10}
+        value={text}
+        className="mt-2 w-full rounded-md border border-border bg-background px-2 py-2 font-mono text-xs text-foreground"
+        onFocus={(e) => e.currentTarget.select()}
+      />
+    </details>
+  )
+}
 
 export default function QuizEditorPage() {
   const params = useParams()
@@ -79,19 +146,27 @@ export default function QuizEditorPage() {
   }
 
   const handleCopySuperPromptForChatGpt = async () => {
-    const text = buildSuperPromptForExternalChat({
-      quizTitle: quiz.title,
-      quizTheme: quiz.theme,
-      notes: superPromptText,
-      questionCount: superQuestionCount,
-    })
+    if (!quiz) return
+    setSuperError(null)
+    let text: string
     try {
-      await navigator.clipboard.writeText(text)
+      text = buildSuperPromptForExternalChat({
+        quizTitle: quiz.title ?? 'Quiz',
+        quizTheme: quiz.theme,
+        notes: superPromptText,
+        questionCount: superQuestionCount,
+      })
+    } catch {
+      setSuperError('Impossible de construire le SuperPrompt.')
+      return
+    }
+    try {
+      await copyTextToClipboard(text)
       setCopyFeedback(true)
       window.setTimeout(() => setCopyFeedback(false), 2500)
     } catch {
       setSuperError(
-        'Impossible de copier (autorisez le presse-papiers ou copiez manuellement depuis la console).',
+        'Copie refusée par le navigateur. Utilisez HTTPS ou localhost, ou sélectionnez le texte affiché ci-dessous et copiez (Ctrl+C).',
       )
     }
   }
@@ -131,7 +206,7 @@ export default function QuizEditorPage() {
         formData.timeLimit,
         formData.points,
         formData.difficulty,
-        quiz.questions.length
+        quiz.questions?.length ?? 0,
       )
 
       setFormData({
@@ -165,39 +240,87 @@ export default function QuizEditorPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-4">Quiz not found</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-4">Quiz introuvable</h2>
           <Link href="/dashboard">
-            <Button>Back to Dashboard</Button>
+            <Button>Retour au tableau de bord</Button>
           </Link>
         </div>
       </div>
     )
   }
 
+  const questionCount = quiz.questions?.length ?? 0
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex min-w-0 items-center gap-4">
             <Link href="/dashboard">
               <Button variant="ghost" size="icon">
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{quiz.title}</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                {quiz.questions?.length || 0} questions
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-bold text-foreground">{quiz.title}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {questionCount} question{questionCount !== 1 ? 's' : ''}
+                {questionCount === 0 && ' — ajoutez-en au moins une avant de lancer'}
               </p>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="gap-2 font-semibold" asChild>
+              <Link href="/aide">
+                <HelpCircle className="h-4 w-4" />
+                Aide prof
+              </Link>
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 font-bold text-white shadow-md"
+              asChild
+            >
+              <Link href={`/dashboard/launch/${quizId}`}>
+                <Play className="h-4 w-4" />
+                Lancer la session
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {questionCount === 0 && (
+          <div className="mb-10 rounded-2xl border-2 border-dashed border-violet-400/50 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/5 p-6">
+            <h2 className="text-lg font-black text-foreground">Par où commencer ?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Le plus rapide : remplissez le cadre ci-dessous puis utilisez ChatGPT + import JSON, ou la
+              génération automatique. Sinon, ajoutez une question à la main.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" size="sm" className="font-semibold" asChild>
+                <a href="#remplir-avec-ia">Remplir avec l’assistant (recommandé)</a>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="font-semibold"
+                onClick={() => setShowAddQuestion(true)}
+              >
+                Saisir une question à la main
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* SuperPrompt — génération IA */}
-        <section className="mb-10 rounded-xl border border-secondary/30 bg-secondary/10 p-6">
+        <section
+          id="remplir-avec-ia"
+          className="mb-10 scroll-mt-24 rounded-xl border border-secondary/30 bg-secondary/10 p-6"
+        >
           <div className="flex items-center gap-2 mb-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/25">
               <Sparkles className="h-4 w-4 text-secondary" />
@@ -252,7 +375,10 @@ export default function QuizEditorPage() {
                 Avec ChatGPT (recommandé sans clé API)
               </h3>
               <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1 mb-3">
-                <li>Cliquez sur « Copier le SuperPrompt ».</li>
+                <li>
+                  Cliquez sur « Copier le SuperPrompt pour ChatGPT » (actif dès que le quiz est chargé ;
+                  des notes plus longues donnent de meilleurs résultats).
+                </li>
                 <li>Ouvrez ChatGPT et collez le texte dans une nouvelle conversation.</li>
                 <li>Copiez toute la réponse JSON de ChatGPT (un objet qui commence par {'{'}"questions").</li>
                 <li>Collez-la ci-dessous et cliquez sur « Importer les questions ».</li>
@@ -261,7 +387,7 @@ export default function QuizEditorPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={superPromptText.trim().length < 20 || importBusy}
+                  disabled={importBusy}
                   onClick={() => void handleCopySuperPromptForChatGpt()}
                   className="gap-2"
                 >
@@ -269,6 +395,11 @@ export default function QuizEditorPage() {
                   {copyFeedback ? 'Copié dans le presse-papiers !' : 'Copier le SuperPrompt pour ChatGPT'}
                 </Button>
               </div>
+              <SuperPromptPreview
+                quiz={quiz}
+                notes={superPromptText}
+                questionCount={superQuestionCount}
+              />
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Coller ici la réponse JSON de ChatGPT
@@ -320,6 +451,7 @@ export default function QuizEditorPage() {
               <p className="text-xs text-muted-foreground">
                 Nécessite <code className="rounded bg-muted px-1">OPENAI_API_KEY</code> ou{' '}
                 <code className="rounded bg-muted px-1">GROQ_API_KEY</code> sur Vercel / .env.local.
+                Au moins 20 caractères dans les notes ci-dessus.
               </p>
               <Button
                 type="button"
@@ -351,14 +483,14 @@ export default function QuizEditorPage() {
         </section>
 
         {/* Questions List */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-foreground">Questions</h2>
+        <div id="liste-questions" className="mb-8 scroll-mt-24">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-xl font-bold text-foreground">Questions du quiz</h2>
             <Button
               onClick={() => setShowAddQuestion(!showAddQuestion)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <Plus className="w-4 h-4" /> Add Question
+              <Plus className="h-4 w-4" /> Ajouter une question
             </Button>
           </div>
 
@@ -378,19 +510,22 @@ export default function QuizEditorPage() {
                     </span>
                   </div>
 
-                  <div className="flex gap-2 text-xs text-muted-foreground">
-                    <span>Time: {q.time_limit}s</span>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>Temps : {q.time_limit}s</span>
                     <span>•</span>
-                    <span>Points: {q.points}</span>
+                    <span>Points : {q.points}</span>
                     <span>•</span>
-                    <span>Level: {q.difficulty}</span>
+                    <span>Difficulté : {q.difficulty}</span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-card border border-border rounded-lg">
-              <p className="text-muted-foreground">No questions yet. Add your first one!</p>
+            <div className="rounded-lg border border-border bg-card py-12 text-center">
+              <p className="text-muted-foreground">
+                Aucune question pour l’instant — utilisez l’assistant plus haut ou le bouton « Ajouter une
+                question ».
+              </p>
             </div>
           )}
         </div>
@@ -398,12 +533,12 @@ export default function QuizEditorPage() {
         {/* Add Question Form */}
         {showAddQuestion && (
           <div className="bg-card border border-border rounded-xl p-8 mb-8">
-            <h3 className="text-lg font-bold text-foreground mb-6">Add New Question</h3>
+            <h3 className="mb-6 text-lg font-bold text-foreground">Nouvelle question</h3>
             <form onSubmit={handleAddQuestion} className="space-y-6">
               {/* Question Text */}
               <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Question Text *
+                <label className="mb-2 block text-sm font-semibold text-foreground">
+                  Intitulé de la question *
                 </label>
                 <textarea
                   value={formData.questionText}
@@ -416,15 +551,15 @@ export default function QuizEditorPage() {
                   required
                   className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   rows={3}
-                  placeholder="What is 2+2?"
+                  placeholder="Ex. : Quelle est la capitale de la France ?"
                 />
               </div>
 
               {/* Question Type */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">
-                    Question Type
+                  <label className="mb-2 block text-sm font-semibold text-foreground">
+                    Type de question
                   </label>
                   <select
                     value={formData.questionType}
@@ -434,17 +569,17 @@ export default function QuizEditorPage() {
                         questionType: e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    <option value="mcq">Multiple Choice</option>
-                    <option value="true_false">True/False</option>
-                    <option value="short_answer">Short Answer</option>
+                    <option value="mcq">QCM (choix multiples)</option>
+                    <option value="true_false">Vrai / Faux</option>
+                    <option value="short_answer">Réponse courte</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">
-                    Difficulty
+                  <label className="mb-2 block text-sm font-semibold text-foreground">
+                    Difficulté
                   </label>
                   <select
                     value={formData.difficulty}
@@ -454,11 +589,11 @@ export default function QuizEditorPage() {
                         difficulty: e.target.value,
                       }))
                     }
-                    className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+                    <option value="easy">Facile</option>
+                    <option value="medium">Moyen</option>
+                    <option value="hard">Difficile</option>
                   </select>
                 </div>
               </div>
@@ -466,8 +601,8 @@ export default function QuizEditorPage() {
               {/* Options (MCQ only) */}
               {formData.questionType === 'mcq' && (
                 <div>
-                  <label className="block text-sm font-semibold text-foreground mb-3">
-                    Answer Options *
+                  <label className="mb-3 block text-sm font-semibold text-foreground">
+                    Réponses (cochez la bonne) *
                   </label>
                   <div className="space-y-2">
                     {formData.options.map((option, idx) => (
@@ -506,8 +641,8 @@ export default function QuizEditorPage() {
               {/* Settings */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">
-                    Time Limit (seconds)
+                  <label className="mb-2 block text-sm font-semibold text-foreground">
+                    Temps limite (secondes)
                   </label>
                   <Input
                     type="number"
@@ -548,13 +683,13 @@ export default function QuizEditorPage() {
                   onClick={() => setShowAddQuestion(false)}
                   className="flex-1"
                 >
-                  Cancel
+                  Annuler
                 </Button>
                 <Button
                   type="submit"
-                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  Add Question
+                  Enregistrer la question
                 </Button>
               </div>
             </form>

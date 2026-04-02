@@ -4,21 +4,41 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { fetchMergedSessionQuestions } from '@/lib/session-questions'
+import {
+  fetchMergedSessionQuestions,
+  sessionLiveFieldsChanged,
+} from '@/lib/session-questions'
 import {
   submitAnswer,
   addReaction,
   getSessionLeaderboard,
 } from '@/app/actions/quiz'
 import { Button } from '@/components/ui/button'
-import { Loader2, Trophy, Users, Zap } from 'lucide-react'
+import {
+  Loader2,
+  Trophy,
+  Users,
+  Zap,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Flame,
+  Sparkles,
+} from 'lucide-react'
 
 type ParticipantRow = {
   id: string
   nickname: string
   score: number
   level: number
+  streak?: number | null
 }
+
+type AnswerFeedback =
+  | { kind: 'correct'; pointsEarned: number }
+  | { kind: 'wrong'; pointsEarned: number }
+  | { kind: 'timeout'; pointsEarned: number }
+  | { kind: 'duplicate'; pointsEarned: number }
 
 export default function StudentPlayerPage() {
   const params = useParams()
@@ -39,6 +59,7 @@ export default function StudentPlayerPage() {
   const [timeLeft, setTimeLeft] = useState(30)
   const [recentReactions, setRecentReactions] = useState<string[]>([])
   const [onlineCount, setOnlineCount] = useState(1)
+  const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(null)
   const questionKeyRef = useRef<string>('')
 
   const refreshLeaderboard = useCallback(async () => {
@@ -55,7 +76,7 @@ export default function StudentPlayerPage() {
   const refreshMe = useCallback(async () => {
     const { data } = await supabase
       .from('participants')
-      .select('id, nickname, score, level')
+      .select('id, nickname, score, level, streak')
       .eq('id', participantId)
       .single()
     if (data) setMe(data as ParticipantRow)
@@ -92,8 +113,9 @@ export default function StudentPlayerPage() {
 
     void boot()
 
-    const sCh = supabase
-      .channel(`student-s-${sessionId}`)
+    /** Un seul canal postgres (moins de charge) : sessions + moi + réactions. */
+    const liveCh = supabase
+      .channel(`student-live-${sessionId}-${participantId}`)
       .on(
         'postgres_changes',
         {
@@ -106,10 +128,6 @@ export default function StudentPlayerPage() {
           setSession(p.new as Record<string, unknown>)
         },
       )
-      .subscribe()
-
-    const meCh = supabase
-      .channel(`student-me-${participantId}`)
       .on(
         'postgres_changes',
         {
@@ -120,6 +138,21 @@ export default function StudentPlayerPage() {
         },
         () => {
           void refreshMe()
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'reactions',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          const emoji = (payload.new as { emoji?: string })?.emoji
+          if (emoji) {
+            setRecentReactions((prev) => [...prev.slice(-12), emoji])
+          }
         },
       )
       .subscribe()
@@ -138,31 +171,25 @@ export default function StudentPlayerPage() {
         }
       })
 
-    const reactCh = supabase
-      .channel(`reactions-${sessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'reactions',
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const emoji = (payload.new as { emoji?: string })?.emoji
-          if (emoji) {
-            setRecentReactions((prev) => [...prev.slice(-12), emoji])
-          }
-        },
-      )
-      .subscribe()
+    /** Secours si Realtime n’est pas activé sur les tables (Dashboard → Publications). */
+    const pollMs = 4000
+    const pollId = window.setInterval(async () => {
+      if (cancelled) return
+      const { data } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .maybeSingle()
+      if (cancelled || !data) return
+      const next = data as Record<string, unknown>
+      setSession((prev) => (sessionLiveFieldsChanged(prev, next) ? next : prev))
+    }, pollMs)
 
     return () => {
       cancelled = true
-      void supabase.removeChannel(sCh)
-      void supabase.removeChannel(meCh)
+      window.clearInterval(pollId)
+      void supabase.removeChannel(liveCh)
       void supabase.removeChannel(presence)
-      void supabase.removeChannel(reactCh)
     }
   }, [sessionId, participantId, supabase, refreshMe, refreshLeaderboard])
 
@@ -176,12 +203,11 @@ export default function StudentPlayerPage() {
 
       setAnswered(true)
       const choice = fromTimeout ? null : selectedAnswer
+      const isCorrect =
+        choice !== null && String(choice) === String(currentQuestion.correct_answer)
+      const limit = currentQuestion.time_limit ?? 30
       try {
-        const isCorrect =
-          choice !== null &&
-          String(choice) === String(currentQuestion.correct_answer)
-        const limit = currentQuestion.time_limit ?? 30
-        await submitAnswer(
+        const res = await submitAnswer(
           participantId,
           sessionId,
           currentQuestion.id,
@@ -189,9 +215,25 @@ export default function StudentPlayerPage() {
           isCorrect,
           Math.max(0, limit - timeLeft),
         )
+        if (res && 'duplicate' in res && res.duplicate) {
+          setAnswerFeedback({ kind: 'duplicate', pointsEarned: 0 })
+        } else if (res && 'pointsEarned' in res) {
+          if (fromTimeout || choice === null) {
+            setAnswerFeedback({ kind: 'timeout', pointsEarned: res.pointsEarned })
+          } else if (isCorrect) {
+            setAnswerFeedback({ kind: 'correct', pointsEarned: res.pointsEarned })
+          } else {
+            setAnswerFeedback({ kind: 'wrong', pointsEarned: res.pointsEarned })
+          }
+        }
         await refreshMe()
+        await refreshLeaderboard()
       } catch (e) {
         console.error(e)
+        setAnswerFeedback({
+          kind: fromTimeout || choice === null ? 'timeout' : isCorrect ? 'correct' : 'wrong',
+          pointsEarned: 0,
+        })
       }
     },
     [
@@ -203,6 +245,7 @@ export default function StudentPlayerPage() {
       sessionId,
       timeLeft,
       refreshMe,
+      refreshLeaderboard,
     ],
   )
 
@@ -212,9 +255,22 @@ export default function StudentPlayerPage() {
       questionKeyRef.current = key
       setSelectedAnswer(null)
       setAnswered(false)
+      setAnswerFeedback(null)
       setTimeLeft(currentQuestion?.time_limit ?? 30)
     }
   }, [qIndex, currentQuestion?.id, currentQuestion?.time_limit, status])
+
+  useEffect(() => {
+    if (status !== 'question' || answered || selectedAnswer === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        void handleSubmitAnswer(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [status, answered, selectedAnswer, handleSubmitAnswer])
 
   useEffect(() => {
     if (status !== 'question' || answered || !currentQuestion) return
@@ -248,8 +304,12 @@ export default function StudentPlayerPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-gradient-to-b from-primary/5 to-background px-8">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-sm font-medium text-muted-foreground">Connexion à la partie…</p>
+        </div>
+        <div className="h-2 w-48 max-w-full overflow-hidden rounded-full live-skeleton" />
       </div>
     )
   }
@@ -267,16 +327,24 @@ export default function StudentPlayerPage() {
 
   if (status === 'finished') {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-gradient-to-b from-background to-muted/40 p-6 text-center animate-in fade-in duration-500">
-        <Trophy className="h-16 w-16 text-amber-500" />
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-8 bg-gradient-to-b from-amber-500/15 via-background to-violet-500/10 p-6 text-center animate-in fade-in zoom-in-95 duration-500">
+        <div className="relative">
+          <div className="absolute inset-0 blur-2xl bg-amber-400/30 rounded-full scale-150" aria-hidden />
+          <Trophy className="relative h-20 w-20 text-amber-500 drop-shadow-lg" />
+        </div>
         <div>
-          <h1 className="text-2xl font-bold">Partie terminée</h1>
-          <p className="mt-2 text-muted-foreground">
-            Merci {me?.nickname} — score final {me?.score ?? 0} pts · niveau {me?.level ?? 1}
+          <h1 className="text-3xl font-black tracking-tight">Bravo !</h1>
+          <p className="mt-3 text-lg text-muted-foreground">
+            <span className="font-semibold text-foreground">{me?.nickname}</span> —{' '}
+            <span className="tabular-nums font-bold text-primary">{me?.score ?? 0} pts</span>
+            <span className="text-muted-foreground"> · niveau {me?.level ?? 1}</span>
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Rang final #{myRank ?? '—'} dans cette session
           </p>
         </div>
-        <Button asChild>
-          <Link href="/join">Retour</Link>
+        <Button asChild size="lg" className="min-w-[200px]">
+          <Link href="/join">Rejouer une autre partie</Link>
         </Button>
       </div>
     )
@@ -284,23 +352,35 @@ export default function StudentPlayerPage() {
 
   if (status === 'waiting') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-b from-primary/10 via-background to-background px-4 py-8">
-        <div className="mx-auto max-w-md space-y-8 pt-8 text-center animate-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 text-sm shadow-sm border border-border">
+      <div className="min-h-[100dvh] bg-gradient-to-b from-primary/15 via-background to-violet-500/5 px-4 py-8">
+        <div className="mx-auto max-w-md space-y-8 pt-10 text-center animate-in slide-in-from-bottom-4 duration-500">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/90 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
             <Users className="h-4 w-4 text-primary" />
-            <span>{onlineCount} connecté(s)</span>
+            <span className="font-medium">{onlineCount} connecté(s)</span>
           </div>
-          <h1 className="text-2xl font-bold">Salle d’attente</h1>
-          <p className="text-muted-foreground">
-            Bonjour <strong>{me?.nickname}</strong> — le professeur va bientôt lancer le défi.
-          </p>
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Votre profil</p>
-            <p className="mt-2 text-lg font-semibold">
-              Rang #{myRank ?? '—'} · Niveau {me?.level ?? 1} · {me?.score ?? 0} pts
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">Salle d’attente</h1>
+            <p className="mt-3 text-muted-foreground">
+              Salut <strong className="text-foreground">{me?.nickname}</strong> — le prof lance la partie
+              quand tout le monde est prêt.
             </p>
           </div>
-          <p className="text-sm text-muted-foreground animate-pulse">En attente du lancement…</p>
+          <div className="rounded-2xl border border-border bg-card p-6 text-left shadow-lg ring-1 ring-primary/5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Votre profil
+            </p>
+            <p className="mt-3 text-lg font-bold tabular-nums">
+              Rang #{myRank ?? '—'} · Nv. {me?.level ?? 1} · {me?.score ?? 0} pts
+            </p>
+            {typeof me?.streak === 'number' && me.streak > 0 && (
+              <p className="mt-2 flex items-center gap-1 text-sm font-medium text-orange-600 dark:text-orange-400">
+                <Flame className="h-4 w-4" /> Série : {me.streak} bonne(s) réponse(s) d’affilée
+              </p>
+            )}
+          </div>
+          <p className="text-sm font-medium text-muted-foreground live-waiting-pulse">
+            En attente du lancement…
+          </p>
         </div>
       </div>
     )
@@ -308,50 +388,60 @@ export default function StudentPlayerPage() {
 
   if (status === 'results') {
     return (
-      <div className="min-h-[100dvh] bg-background px-4 pb-28 pt-6 animate-in zoom-in-95 duration-300">
-        <header className="mx-auto mb-6 flex max-w-lg items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">Classement temps réel</p>
-            <p className="text-lg font-bold">TOP 5</p>
+      <div className="min-h-[100dvh] bg-gradient-to-b from-violet-500/10 via-background to-background px-4 pb-28 pt-6 animate-in zoom-in-95 duration-300">
+        <header className="mx-auto mb-6 flex max-w-lg items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 shrink-0 text-violet-500" />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Temps réel</p>
+              <p className="text-lg font-black">TOP 5</p>
+            </div>
           </div>
           <div className="text-right text-sm">
             <p className="font-semibold text-primary">Vous</p>
-            <p>
+            <p className="tabular-nums">
               #{myRank ?? '—'} · Nv.{me?.level ?? 1} · {me?.score ?? 0} pts
             </p>
           </div>
         </header>
 
         <ol className="mx-auto max-w-lg space-y-3">
-          {leaderboard.map((row, i) => (
-            <li
-              key={row.rank + row.nickname}
-              className={`flex items-center justify-between rounded-2xl border px-4 py-3 transition-all ${
-                row.id === participantId
-                  ? 'border-primary bg-primary/10 scale-[1.02]'
-                  : 'border-border bg-card'
-              }`}
-              style={{ animationDelay: `${i * 80}ms` }}
-            >
-              <span className="flex items-center gap-3">
-                <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
-                    row.rank <= 3 ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-muted'
-                  }`}
-                >
-                  {row.rank}
+          {leaderboard.map((row, i) => {
+            const medal =
+              row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : null
+            const isMe = row.id === participantId
+            const base =
+              row.rank === 1
+                ? 'border-amber-400/50 bg-amber-500/10'
+                : row.rank === 2
+                  ? 'border-slate-400/35 bg-slate-400/10'
+                  : row.rank === 3
+                    ? 'border-orange-400/40 bg-orange-500/10'
+                    : 'border-border bg-card'
+            return (
+              <li
+                key={row.rank + row.nickname}
+                className={`flex animate-in fade-in slide-in-from-left-2 items-center justify-between rounded-2xl border-2 px-4 py-3 duration-300 ${base} ${
+                  isMe ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02]' : ''
+                }`}
+                style={{ animationDelay: `${i * 70}ms` }}
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center text-lg font-bold">
+                    {medal ?? <span className="text-sm text-muted-foreground">#{row.rank}</span>}
+                  </span>
+                  <span className={`font-medium ${isMe ? 'text-primary' : ''}`}>{row.nickname}</span>
                 </span>
-                <span className="font-medium">{row.nickname}</span>
-              </span>
-              <span className="text-sm font-semibold">
-                {row.score} pts · Nv.{row.level}
-              </span>
-            </li>
-          ))}
+                <span className="shrink-0 text-sm font-bold tabular-nums">
+                  {row.score} pts · Nv.{row.level}
+                </span>
+              </li>
+            )
+          })}
         </ol>
 
-        <div className="mx-auto mt-10 max-w-lg rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-sm text-muted-foreground">
-          Le professeur lance la prochaine question quand tout le monde est prêt.
+        <div className="mx-auto mt-10 max-w-lg rounded-xl border border-dashed border-primary/25 bg-primary/5 p-4 text-center text-sm text-muted-foreground">
+          L’animateur envoie la prochaine question quand c’est bon pour la classe.
         </div>
 
         <div className="pointer-events-none fixed bottom-4 left-0 right-0 flex flex-wrap justify-center gap-2 px-4">
@@ -369,91 +459,153 @@ export default function StudentPlayerPage() {
   }
 
   if (status === 'question' && currentQuestion) {
+    const timeLimit = Math.max(5, Number(currentQuestion.time_limit ?? 30))
+    const timeRatio = timeLimit > 0 ? timeLeft / timeLimit : 0
+    const correctIdx = Number(currentQuestion.correct_answer)
+
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-b from-background to-muted/20 pb-32">
-        <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-2 px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Q.{qIndex + 1} / {questions.length}
-              </p>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
-                  style={{
-                    width: `${((qIndex + 1) / Math.max(questions.length, 1)) * 100}%`,
-                  }}
-                />
+      <div className="min-h-[100dvh] bg-gradient-to-b from-emerald-500/5 via-background to-muted/25 pb-36">
+        <header className="sticky top-0 z-40 border-b border-border bg-card/95 shadow-sm backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
+          <div className="mx-auto max-w-lg px-4 pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Question {qIndex + 1} / {questions.length}
+                </p>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary/40 transition-all duration-700 ease-out"
+                    style={{
+                      width: `${((qIndex + 1) / Math.max(questions.length, 1)) * 100}%`,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="shrink-0 text-right">
-              <p
-                className={`text-2xl font-black tabular-nums ${
-                  timeLeft <= 5 ? 'text-destructive animate-pulse' : 'text-foreground'
+              <div
+                className={`flex shrink-0 items-center gap-1 rounded-xl border-2 px-3 py-1.5 tabular-nums ${
+                  timeLeft <= 5
+                    ? 'border-destructive/60 bg-destructive/10 text-destructive'
+                    : 'border-border bg-muted/50 text-foreground'
                 }`}
               >
-                {timeLeft}s
-              </p>
+                <Clock className="h-4 w-4 opacity-70" />
+                <span className={`text-xl font-black ${timeLeft <= 5 ? 'animate-pulse' : ''}`}>
+                  {timeLeft}s
+                </span>
+              </div>
+            </div>
+            <div
+              className="mt-2 h-1 overflow-hidden rounded-full bg-muted/80"
+              aria-hidden
+            >
+              <div
+                className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${
+                  timeLeft <= 5 ? 'bg-destructive' : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.max(0, Math.min(100, timeRatio * 100))}%` }}
+              />
             </div>
           </div>
-          <div className="flex justify-between gap-2 border-t border-border/50 px-4 py-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 px-4 py-2.5 text-xs">
             <span className="text-muted-foreground">
               <Users className="mr-1 inline h-3 w-3" />
               {onlineCount} en ligne
             </span>
-            <span>
-              Rang <strong className="text-primary">#{myRank ?? '—'}</strong> · Nv.{me?.level ?? 1}{' '}
-              · {me?.score ?? 0} pts
+            <span className="tabular-nums">
+              Rang <strong className="text-primary">#{myRank ?? '—'}</strong> · Nv.{me?.level ?? 1} ·{' '}
+              {me?.score ?? 0} pts
             </span>
+            {typeof me?.streak === 'number' && me.streak > 0 && (
+              <span className="flex items-center gap-0.5 font-semibold text-orange-600 dark:text-orange-400">
+                <Flame className="h-3.5 w-3.5" />
+                {me.streak}
+              </span>
+            )}
           </div>
         </header>
 
         <main className="mx-auto max-w-lg px-4 py-6">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-lg ring-1 ring-black/5 dark:ring-white/10 animate-in fade-in slide-in-from-bottom-3 duration-300">
             <h2 className="text-balance text-xl font-bold leading-snug sm:text-2xl">
               {currentQuestion.question_text}
             </h2>
 
             {currentQuestion.question_type === 'mcq' && Array.isArray(currentQuestion.options) && (
               <div className="mt-6 grid grid-cols-1 gap-3">
-                {currentQuestion.options.map((option: string, idx: number) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    disabled={answered}
-                    onClick={() => !answered && setSelectedAnswer(String(idx))}
-                    className={`rounded-xl border-2 px-4 py-4 text-left text-sm font-medium transition-all active:scale-[0.98] ${
-                      selectedAnswer === String(idx)
-                        ? 'border-primary bg-primary/15'
-                        : 'border-border bg-background hover:border-primary/40'
-                    } ${answered ? 'opacity-60' : ''}`}
-                  >
-                    <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-current text-xs">
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    {option}
-                  </button>
-                ))}
+                {currentQuestion.options.map((option: string, idx: number) => {
+                  const isSel = selectedAnswer === String(idx)
+                  const isCor = idx === correctIdx
+                  let reveal = ''
+                  if (answered) {
+                    if (isCor) {
+                      reveal =
+                        'border-emerald-500 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100'
+                    } else if (isSel && !isCor) {
+                      reveal = 'border-destructive bg-destructive/10'
+                    } else {
+                      reveal = 'opacity-45'
+                    }
+                  }
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={answered}
+                      onClick={() => !answered && setSelectedAnswer(String(idx))}
+                      className={`rounded-xl border-2 px-4 py-4 text-left text-sm font-medium transition-all active:scale-[0.98] ${
+                        !answered && isSel
+                          ? 'border-primary bg-primary/15 shadow-md'
+                          : !answered
+                            ? 'border-border bg-background hover:border-primary/35'
+                            : ''
+                      } ${reveal}`}
+                    >
+                      <span className="mr-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-current text-xs font-bold">
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                      {option}
+                      {answered && isCor && (
+                        <CheckCircle2 className="ml-2 inline h-4 w-4 text-emerald-600" />
+                      )}
+                      {answered && isSel && !isCor && (
+                        <XCircle className="ml-2 inline h-4 w-4 text-destructive" />
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
             {currentQuestion.question_type === 'true_false' && (
               <div className="mt-6 grid grid-cols-2 gap-3">
-                {['Vrai', 'Faux'].map((label, idx) => (
-                  <button
-                    key={label}
-                    type="button"
-                    disabled={answered}
-                    onClick={() => !answered && setSelectedAnswer(String(idx))}
-                    className={`rounded-xl border-2 py-4 text-center font-semibold transition-all ${
-                      selectedAnswer === String(idx)
-                        ? 'border-primary bg-primary/15'
-                        : 'border-border'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {['Vrai', 'Faux'].map((label, idx) => {
+                  const isSel = selectedAnswer === String(idx)
+                  const isCor = idx === correctIdx
+                  let reveal = ''
+                  if (answered) {
+                    if (isCor) {
+                      reveal =
+                        'border-emerald-500 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100'
+                    } else if (isSel && !isCor) {
+                      reveal = 'border-destructive bg-destructive/10'
+                    } else {
+                      reveal = 'opacity-45'
+                    }
+                  }
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={answered}
+                      onClick={() => !answered && setSelectedAnswer(String(idx))}
+                      className={`rounded-xl border-2 py-4 text-center text-base font-bold transition-all ${
+                        !answered && isSel ? 'border-primary bg-primary/15' : !answered ? 'border-border' : ''
+                      } ${reveal}`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
@@ -472,20 +624,80 @@ export default function StudentPlayerPage() {
               </div>
             )}
 
-            <div className="mt-6">
+            <div className="mt-6 space-y-4">
               {!answered ? (
-                <Button
-                  className="h-12 w-full gap-2 text-base"
-                  disabled={selectedAnswer === null}
-                  onClick={() => void handleSubmitAnswer(false)}
-                >
-                  <Zap className="h-5 w-5" />
-                  Valider
-                </Button>
+                <>
+                  <Button
+                    className="h-12 w-full gap-2 text-base font-bold shadow-md"
+                    disabled={selectedAnswer === null}
+                    onClick={() => void handleSubmitAnswer(false)}
+                  >
+                    <Zap className="h-5 w-5" />
+                    Valider (ou Entrée)
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground">
+                    Choisis une réponse puis valide — le chrono compte.
+                  </p>
+                </>
               ) : (
-                <p className="text-center text-sm text-muted-foreground">
-                  Réponse enregistrée — en attente du classement…
-                </p>
+                <div className="space-y-3">
+                  {answerFeedback && (
+                    <div
+                      className={`live-feedback-pop rounded-xl border-2 p-4 text-center ${
+                        answerFeedback.kind === 'correct'
+                          ? 'border-emerald-500/50 bg-emerald-500/10'
+                          : answerFeedback.kind === 'wrong'
+                            ? 'border-destructive/40 bg-destructive/10'
+                            : answerFeedback.kind === 'timeout'
+                              ? 'border-amber-500/40 bg-amber-500/10'
+                              : 'border-border bg-muted/40'
+                      }`}
+                    >
+                      {answerFeedback.kind === 'correct' && (
+                        <>
+                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-600" />
+                          <p className="text-lg font-black text-emerald-800 dark:text-emerald-200">
+                            Bonne réponse !
+                          </p>
+                          <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
+                            +{answerFeedback.pointsEarned} points
+                          </p>
+                        </>
+                      )}
+                      {answerFeedback.kind === 'wrong' && (
+                        <>
+                          <XCircle className="mx-auto mb-2 h-10 w-10 text-destructive" />
+                          <p className="text-lg font-bold text-destructive">Pas tout à fait…</p>
+                          <p className="mt-1 text-sm text-muted-foreground">Pas de point cette fois.</p>
+                        </>
+                      )}
+                      {answerFeedback.kind === 'timeout' && (
+                        <>
+                          <Clock className="mx-auto mb-2 h-10 w-10 text-amber-600" />
+                          <p className="text-lg font-bold text-amber-800 dark:text-amber-200">
+                            Temps écoulé
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">Réponse non prise en compte.</p>
+                        </>
+                      )}
+                      {answerFeedback.kind === 'duplicate' && (
+                        <p className="text-sm text-muted-foreground">
+                          Réponse déjà enregistrée pour cette question.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {typeof currentQuestion.explanation === 'string' &&
+                    currentQuestion.explanation.trim().length > 0 && (
+                      <div className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm leading-relaxed text-muted-foreground">
+                        <span className="font-semibold text-foreground">Pourquoi ? </span>
+                        {currentQuestion.explanation}
+                      </div>
+                    )}
+                  <p className="text-center text-sm font-medium text-muted-foreground">
+                    En attente du classement affiché par l’animateur…
+                  </p>
+                </div>
               )}
             </div>
           </div>

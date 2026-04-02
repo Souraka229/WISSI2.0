@@ -124,3 +124,57 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Jeu live — micro-animations (sans lib externe) */
+@keyframes live-soft-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@keyframes live-celebrate {
+  0% {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes live-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.live-waiting-pulse {
+  animation: live-soft-pulse 1.8s ease-in-out infinite;
+}
+
+.live-feedback-pop {
+  animation: live-celebrate 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.live-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--background) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: live-shimmer 1.2s ease-in-out infinite;
+}

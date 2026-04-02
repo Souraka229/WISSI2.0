@@ -41,3 +41,17 @@ export async function countSessionQuestions(
   const qs = await fetchMergedSessionQuestions(supabase, session)
   return qs.length
 }
+
+/** Pour le polling de secours : évite setState si rien n’a changé côté UI live. */
+export function sessionLiveFieldsChanged(
+  prev: Record<string, unknown> | null,
+  next: Record<string, unknown>,
+): boolean {
+  if (!prev) return true
+  return (
+    prev.status !== next.status ||
+    Number(prev.current_question_index ?? 0) !== Number(next.current_question_index ?? 0) ||
+    prev.game_mode !== next.game_mode ||
+    prev.secondary_quiz_id !== next.secondary_quiz_id
+  )
+}

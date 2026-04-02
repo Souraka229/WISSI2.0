@@ -5,8 +5,22 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createQuiz } from '@/app/actions/quiz'
-import { ArrowLeft, Zap } from 'lucide-react'
+import { ArrowLeft, Zap, Sparkles, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
+
+const THEME_CHIPS: { value: string; label: string }[] = [
+  { value: 'history', label: 'Histoire' },
+  { value: 'science', label: 'Sciences' },
+  { value: 'math', label: 'Maths' },
+  { value: 'language', label: 'Langues' },
+  { value: 'general', label: 'Général' },
+]
+
+const LEVEL_CHIPS: { value: string; label: string }[] = [
+  { value: 'beginner', label: 'Débutant' },
+  { value: 'intermediate', label: 'Intermédiaire' },
+  { value: 'advanced', label: 'Avancé' },
+]
 
 export default function CreateQuizPage() {
   const router = useRouter()
@@ -59,20 +73,36 @@ export default function CreateQuizPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-border sticky top-0 z-40 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 h-16 flex items-center gap-4">
-          <Link href="/dashboard" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Retour</span>
+      <div className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-6 lg:px-8">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Retour
           </Link>
+          <Button variant="outline" size="sm" className="gap-1.5 font-semibold" asChild>
+            <Link href="/aide">
+              <HelpCircle className="h-4 w-4" />
+              Aide
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* Form */}
       <main className="max-w-2xl mx-auto px-6 lg:px-8 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Créer un nouveau quiz</h1>
-          <p className="text-muted-foreground">Configurez les informations de base de votre quiz interactif</p>
+          <p className="flex items-center gap-2 text-sm font-bold text-violet-600 dark:text-violet-400">
+            <Sparkles className="h-4 w-4" />
+            Nouveau quiz
+          </p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight">Créer un quiz</h1>
+          <p className="mt-2 text-muted-foreground">
+            Ensuite vous ajouterez les questions, le SuperPrompt (ChatGPT) ou la génération IA sur la
+            fiche du quiz.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -119,6 +149,54 @@ export default function CreateQuizPage() {
             </div>
 
             {/* Theme & Level */}
+            <div className="mb-6 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300">
+                Raccourcis (1 clic)
+              </p>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {THEME_CHIPS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        theme: c.value,
+                      }))
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      formData.theme === c.value
+                        ? 'border-violet-600 bg-violet-600 text-white shadow-md'
+                        : 'border-border bg-background hover:border-violet-400'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {LEVEL_CHIPS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        level: c.value,
+                      }))
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      formData.level === c.value
+                        ? 'border-fuchsia-600 bg-fuchsia-600 text-white shadow-md'
+                        : 'border-border bg-background hover:border-fuchsia-400'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -185,9 +263,9 @@ export default function CreateQuizPage() {
               type="submit"
               size="lg"
               disabled={!formData.title || isLoading}
-              className="flex-1 bg-foreground text-background hover:bg-foreground/90"
+              className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 font-bold text-white shadow-lg shadow-violet-500/25 hover:from-violet-500 hover:to-fuchsia-500"
             >
-              {isLoading ? 'Création...' : 'Créer le quiz'}
+              {isLoading ? 'Création…' : 'Créer et ouvrir l’éditeur'}
             </Button>
           </div>
         </form>

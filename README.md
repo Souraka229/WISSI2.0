@@ -1,6 +1,19 @@
-# QuizLive - Premium Interactive Quiz Platform
+# SCITI-Quiz
 
-A high-performance, production-ready interactive quiz platform built with Next.js 15, Supabase, and React. Designed for educational institutions and can be positioned as a premium alternative to Kahoot.
+Plateforme de **quiz interactif multijoueur en temps réel** (Next.js, Supabase) : sessions par **PIN** et **QR code**, pupitre animateur, classement live, SuperPrompt / IA pour les QCM.
+
+## Documentation
+
+| Document | Contenu |
+|----------|---------|
+| **[/aide](/aide)** (dans l’app déployée) | Aide pas à pas intégrée pour les profs |
+| [docs/GUIDE_ENSEIGNANTS.md](./docs/GUIDE_ENSEIGNANTS.md) | Parcours prof : création → questions → lancement → pupitre |
+| [docs/SEO.md](./docs/SEO.md) | SEO technique, sitemap, robots, attentes réalistes sur Google |
+| [.env.example](./.env.example) | Variables d’environnement (dont `NEXT_PUBLIC_APP_URL` pour le SEO) |
+
+---
+
+_Anciennement documenté sous le nom « QuizLive » — le produit affiché dans l’UI est **SCITI-Quiz**._
 
 ## Project Value Proposition
 
@@ -314,6 +327,8 @@ For premium features and enterprise licensing inquiries, position as a high-valu
 
 **Last Updated:** 2024
 **Status:** Production Ready
-#   W I S S I 2 . 0  
- #   W I S S I 2 . 0  
+#   W I S S I 2 . 0 
+ 
+ #   W I S S I 2 . 0 
+ 
  
