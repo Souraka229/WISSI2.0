@@ -23,6 +23,7 @@ import {
   History,
   HelpCircle,
   Sparkles,
+  Shield,
 } from 'lucide-react'
 
 function initialsFrom(displayName: string | null | undefined, email: string | null | undefined) {
@@ -46,9 +47,15 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('display_name, email, created_at')
+    .select('display_name, email, created_at, role')
     .eq('id', user.id)
     .maybeSingle()
+
+  const profileRole =
+    profile && typeof profile === 'object' && 'role' in profile
+      ? String((profile as { role?: string | null }).role ?? 'user')
+      : 'user'
+  const isSuperadmin = profileRole === 'superadmin'
 
   const [{ count: quizCount }, { count: sessionCount }] = await Promise.all([
     supabase
@@ -208,6 +215,28 @@ export default async function ProfilePage() {
                     <p className="mt-0.5 font-medium capitalize text-foreground">{memberSince}</p>
                   </div>
                 </div>
+
+                <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Accès superadmin
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    La page <code className="rounded bg-muted px-1 py-0.5 text-xs">/superadmin</code> est réservée
+                    aux comptes dont le profil a le rôle <code className="rounded bg-muted px-1 text-xs">superadmin</code>
+                    . Promotion la plus simple : dans le SQL Editor Supabase (après le script{' '}
+                    <code className="rounded bg-muted px-1 text-xs">003_superadmin_analytics.sql</code>), exécutez :
+                  </p>
+                  <pre className="mt-2 overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-[11px] leading-relaxed text-foreground">
+                    {`update public.profiles\n  set role = 'superadmin'\n  where email = 'votre@email.com';`}
+                  </pre>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Déconnectez-vous puis reconnectez-vous, ou rechargez la session. Ensuite ouvrez{' '}
+                    <Link href="/superadmin" className="font-medium text-violet-600 underline dark:text-violet-400">
+                      /superadmin
+                    </Link>
+                    {isSuperadmin ? ' — votre compte y a déjà accès.' : ' — sans ce rôle, vous serez renvoyé vers le tableau de bord.'}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -252,6 +281,18 @@ export default async function ProfilePage() {
                     Aide enseignant
                   </Link>
                 </Button>
+                {isSuperadmin ? (
+                  <Button
+                    asChild
+                    variant="secondary"
+                    className="h-11 justify-start gap-2 border-violet-500/40 bg-violet-500/10 font-semibold text-violet-900 hover:bg-violet-500/15 dark:text-violet-100"
+                  >
+                    <Link href="/superadmin">
+                      <Shield className="h-4 w-4" />
+                      Console superadmin
+                    </Link>
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           </div>

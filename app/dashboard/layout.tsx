@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { CommandPalette } from '@/components/command-palette'
 
 /** Espace enseignant : pas d’indexation (contenu privé, évite duplicate thin content SEO). */
 export const metadata: Metadata = {
@@ -14,5 +15,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <>
+      <CommandPalette />
+      {children}
+    </>
+  )
 }

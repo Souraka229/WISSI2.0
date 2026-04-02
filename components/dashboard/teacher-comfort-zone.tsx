@@ -1,13 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import {
-  BookOpen,
-  ClipboardList,
-  GraduationCap,
-  HelpCircle,
-  PlayCircle,
-  Sparkles,
-} from 'lucide-react'
+import { HelpCircle, PlayCircle, Sparkles } from 'lucide-react'
 
 type Props = {
   quizCount: number
@@ -99,21 +92,6 @@ export function TeacherComfortZone({ quizCount }: Props) {
           </div>
         </li>
       </ol>
-
-      <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-5 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1">
-          <ClipboardList className="h-3.5 w-3.5" />
-          Migration SQL : voir dépôt <code className="rounded bg-muted px-1">scripts/</code>
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1">
-          <GraduationCap className="h-3.5 w-3.5" />
-          Guide détaillé : <code className="rounded bg-muted px-1">docs/GUIDE_ENSEIGNANTS.md</code>
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1">
-          <BookOpen className="h-3.5 w-3.5" />
-          Page <Link href="/aide" className="font-semibold text-foreground underline-offset-2 hover:underline">Aide</Link> dans l’app
-        </span>
-      </div>
     </section>
   )
 }

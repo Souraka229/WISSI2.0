@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createQuestion, deleteQuestion, getQuiz, updateQuestion } from '@/app/actions/quiz'
+import {
+  createQuestion,
+  deleteQuestion,
+  getQuiz,
+  updateQuestion,
+  updateQuizIsPublic,
+} from '@/app/actions/quiz'
 import {
   generateQuestionsWithSuperPrompt,
   importQuestionsFromChatGptJson,
@@ -10,6 +16,8 @@ import {
 import { buildSuperPromptForExternalChat } from '@/lib/superprompt-template'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Plus,
   ArrowLeft,
@@ -121,6 +129,8 @@ export default function QuizEditorPage() {
   const [importError, setImportError] = useState<string | null>(null)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
   const [copyFeedback, setCopyFeedback] = useState(false)
+  const [visibilityBusy, setVisibilityBusy] = useState(false)
+  const [visibilityError, setVisibilityError] = useState<string | null>(null)
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -363,6 +373,64 @@ export default function QuizEditorPage() {
       </div>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <section
+          className="mb-10 rounded-xl border border-border bg-card/80 p-5 shadow-sm"
+          aria-labelledby="visibilite-quiz-title"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <h2 id="visibilite-quiz-title" className="text-base font-bold text-foreground">
+                Visibilité du quiz
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                <strong>Privé</strong> : visible seulement pour vous dans le tableau de bord.{' '}
+                <strong>Public</strong> : le quiz est marqué comme partageable côté base (catalogue / intégrations
+                futures). Les sessions restent contrôlées par vous au lancement.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-2 md:flex-row md:items-center">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="quiz-is-public"
+                  checked={Boolean(quiz.is_public)}
+                  disabled={visibilityBusy}
+                  onCheckedChange={async (checked) => {
+                    setVisibilityError(null)
+                    setVisibilityBusy(true)
+                    const prev = Boolean(quiz.is_public)
+                    setQuiz((q) => (q ? { ...q, is_public: checked } : q))
+                    try {
+                      const res = await updateQuizIsPublic(quizId, checked)
+                      if (!res.success) {
+                        setQuiz((q) => (q ? { ...q, is_public: prev } : q))
+                        setVisibilityError(res.error)
+                      } else {
+                        router.refresh()
+                      }
+                    } catch {
+                      setQuiz((q) => (q ? { ...q, is_public: prev } : q))
+                      setVisibilityError('Mise à jour impossible.')
+                    } finally {
+                      setVisibilityBusy(false)
+                    }
+                  }}
+                />
+                <Label htmlFor="quiz-is-public" className="cursor-pointer text-sm font-semibold">
+                  {quiz.is_public ? 'Public' : 'Privé'}
+                </Label>
+              </div>
+              {visibilityBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+              ) : null}
+            </div>
+          </div>
+          {visibilityError ? (
+            <p className="mt-3 text-sm text-destructive" role="alert">
+              {visibilityError}
+            </p>
+          ) : null}
+        </section>
+
         {questionCount === 0 && (
           <div className="mb-10 rounded-2xl border-2 border-dashed border-violet-400/50 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/5 p-6">
             <h2 className="text-lg font-black text-foreground">Par où commencer ?</h2>

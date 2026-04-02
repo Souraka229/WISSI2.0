@@ -108,6 +108,145 @@ export async function deleteQuiz(id: string) {
   revalidateTag('quizzes')
 }
 
+/**
+ * Bascule la visibilité « catalogue / partage » du quiz (colonne is_public).
+ */
+export async function updateQuizIsPublic(
+  quizId: string,
+  isPublic: boolean,
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return { success: false, error: 'Non authentifié.' }
+    }
+
+    const { error } = await supabase
+      .from('quizzes')
+      .update({ is_public: isPublic, updated_at: new Date().toISOString() })
+      .eq('id', quizId)
+      .eq('user_id', user.id)
+
+    if (error) {
+      console.error('[updateQuizIsPublic]', error)
+      return { success: false, error: error.message }
+    }
+
+    revalidateTag('quizzes')
+    revalidateTag(`quiz-${quizId}`)
+    return { success: true }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Erreur inconnue'
+    console.error('[updateQuizIsPublic]', e)
+    return { success: false, error: message }
+  }
+}
+
+type QuestionRow = {
+  question_text: string
+  question_type: string
+  options: unknown
+  correct_answer: string
+  explanation: string | null
+  time_limit: number | null
+  points: number | null
+  difficulty: string | null
+  order_index: number
+}
+
+/**
+ * Duplique un quiz et toutes ses questions (titre préfixé [Copie]).
+ */
+export async function duplicateQuiz(
+  id: string,
+): Promise<{ success: true; newId: string } | { success: false; error: string }> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'Non authentifié.' }
+    }
+
+    const source = await getQuiz(id)
+    if (!source || (source as { user_id?: string }).user_id !== user.id) {
+      return { success: false, error: 'Quiz introuvable ou accès refusé.' }
+    }
+
+    const src = source as {
+      title: string
+      description: string | null
+      theme: string | null
+      level: string | null
+      is_public: boolean | null
+      questions: QuestionRow[] | null
+    }
+
+    const { data: newQuiz, error: insertErr } = await supabase
+      .from('quizzes')
+      .insert({
+        user_id: user.id,
+        title: `[Copie] ${src.title}`,
+        description: src.description,
+        theme: src.theme,
+        level: src.level,
+        is_public: src.is_public ?? false,
+      })
+      .select('id')
+      .single()
+
+    if (insertErr || !newQuiz) {
+      console.error('[duplicateQuiz] insert', insertErr)
+      return { success: false, error: 'Impossible de créer la copie.' }
+    }
+
+    const newId = newQuiz.id as string
+    const qs = src.questions ?? []
+
+    for (const q of qs) {
+      const { error: qErr } = await supabase.from('questions').insert({
+        quiz_id: newId,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        options: q.options,
+        correct_answer: q.correct_answer,
+        explanation: q.explanation ?? null,
+        time_limit: q.time_limit ?? 30,
+        points: q.points ?? 100,
+        difficulty: q.difficulty,
+        order_index: q.order_index,
+      })
+      if (qErr) {
+        console.error('[duplicateQuiz] question', qErr)
+        await supabase.from('quizzes').delete().eq('id', newId)
+        return { success: false, error: 'Copie interrompue lors de la duplication des questions.' }
+      }
+    }
+
+    revalidateTag('quizzes')
+    revalidateTag(`quiz-${newId}`)
+    return { success: true, newId }
+  } catch (e) {
+    console.error('[duplicateQuiz]', e)
+    const message = e instanceof Error ? e.message : 'Erreur inconnue'
+    return { success: false, error: message }
+  }
+}
+
+/** Index léger pour la palette de commandes (Cmd+K). */
+export async function getQuizPaletteItems(): Promise<{ id: string; title: string }[]> {
+  const rows = await getQuizzes()
+  return (rows ?? []).map((q) => ({
+    id: (q as { id: string }).id,
+    title: (q as { title: string }).title,
+  }))
+}
+
 export async function createQuestion(
   quizId: string,
   questionText: string,

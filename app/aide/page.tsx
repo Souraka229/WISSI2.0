@@ -1,14 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import {
-  ArrowLeft,
-  CheckCircle2,
-  MonitorPlay,
-  QrCode,
-  Users,
-  Zap,
-} from 'lucide-react'
+import { ArrowLeft, MonitorPlay, QrCode, Users, Zap } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Aide enseignant',
@@ -38,9 +31,9 @@ const steps = [
   },
   {
     title: 'Pendant le cours',
-    body: 'Ouvrez le pupitre animateur : démarrez la partie, affichez le TOP 5, passez à la question suivante ou terminez. Les élèves restent sur /join avec leur pseudo.',
+    body: 'Ouvrez le pupitre pour démarrer, afficher le classement et enchaîner les questions. Les élèves rejoignent avec le PIN ou le QR et choisissent un pseudo.',
     href: '/join',
-    cta: 'Page rejoindre (test)',
+    cta: 'Voir la page élève',
   },
 ]
 
@@ -111,28 +104,6 @@ export default function AidePage() {
               </li>
             ))}
           </ol>
-        </section>
-
-        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-emerald-800 dark:text-emerald-200">
-            <CheckCircle2 className="h-5 w-5" />
-            Si quelque chose bloque
-          </h2>
-          <ul className="mt-3 list-inside list-disc space-y-2 text-sm text-muted-foreground">
-            <li>
-              Exécutez les scripts SQL <code className="rounded bg-muted px-1">001</code> puis{' '}
-              <code className="rounded bg-muted px-1">002</code> dans Supabase.
-            </li>
-            <li>Activez le Realtime sur les tables indiquées dans le commentaire du script 002.</li>
-            <li>
-              Vérifiez les variables d’environnement (<code className="rounded bg-muted px-1">.env.example</code>
-              ).
-            </li>
-          </ul>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Documentation complète dans le fichier{' '}
-            <code className="rounded bg-muted px-1">docs/GUIDE_ENSEIGNANTS.md</code> du projet.
-          </p>
         </section>
 
         <div className="pb-8 text-center">
