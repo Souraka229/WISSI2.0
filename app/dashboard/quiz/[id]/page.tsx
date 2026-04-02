@@ -29,8 +29,12 @@ import {
   HelpCircle,
   Pencil,
   Trash2,
+  Globe2,
+  Lock,
 } from 'lucide-react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
+import { QuizViralSharePanel } from '@/components/quiz/quiz-viral-share-panel'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -120,7 +124,8 @@ export default function QuizEditorPage() {
     difficulty: 'medium',
   })
   const [superPromptText, setSuperPromptText] = useState('')
-  const [superQuestionCount, setSuperQuestionCount] = useState(5)
+  /** Saisie libre (pas de plafond) ; normalisée en entier ≥ 1 à l’envoi. */
+  const [superQuestionCountStr, setSuperQuestionCountStr] = useState('5')
   const [superBusy, setSuperBusy] = useState(false)
   const [superError, setSuperError] = useState<string | null>(null)
   const [superSuccess, setSuperSuccess] = useState<string | null>(null)
@@ -152,10 +157,12 @@ export default function QuizEditorPage() {
     setSuperSuccess(null)
     setSuperBusy(true)
     try {
+      const parsedCount = parseInt(superQuestionCountStr.trim(), 10)
+      const countForApi = Number.isFinite(parsedCount) && parsedCount >= 1 ? parsedCount : 1
       const { created } = await generateQuestionsWithSuperPrompt(
         quizId,
         superPromptText,
-        superQuestionCount,
+        countForApi,
       )
       setSuperSuccess(`${created} question(s) générée(s) et ajoutées au quiz.`)
       setSuperPromptText('')
@@ -175,11 +182,13 @@ export default function QuizEditorPage() {
     setSuperError(null)
     let text: string
     try {
+      const parsedCount = parseInt(superQuestionCountStr.trim(), 10)
+      const countForPrompt = Number.isFinite(parsedCount) && parsedCount >= 1 ? parsedCount : 1
       text = buildSuperPromptForExternalChat({
         quizTitle: quiz.title ?? 'Quiz',
         quizTheme: quiz.theme,
         notes: superPromptText,
-        questionCount: superQuestionCount,
+        questionCount: countForPrompt,
       })
     } catch {
       setSuperError('Impossible de construire le SuperPrompt.')
@@ -334,9 +343,9 @@ export default function QuizEditorPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+      {/* En-tête + barre visibilité (sticky, toujours visible) */}
+      <div className="sticky top-0 z-40 border-b border-border bg-card/90 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex min-w-0 items-center gap-4">
             <Link href="/dashboard">
               <Button variant="ghost" size="icon">
@@ -370,66 +379,110 @@ export default function QuizEditorPage() {
             </Button>
           </div>
         </div>
-      </div>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <section
-          className="mb-10 rounded-xl border border-border bg-card/80 p-5 shadow-sm"
-          aria-labelledby="visibilite-quiz-title"
+        <div
+          className={cn(
+            'border-t',
+            quiz.is_public
+              ? 'border-emerald-500/30 bg-gradient-to-r from-emerald-500/[0.12] via-violet-500/[0.06] to-fuchsia-500/[0.08]'
+              : 'border-border bg-muted/50',
+          )}
+          role="region"
+          aria-label="Réglage de visibilité du quiz"
         >
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <h2 id="visibilite-quiz-title" className="text-base font-bold text-foreground">
-                Visibilité du quiz
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                <strong>Privé</strong> : visible seulement pour vous dans le tableau de bord.{' '}
-                <strong>Public</strong> : le quiz est marqué comme partageable côté base (catalogue / intégrations
-                futures). Les sessions restent contrôlées par vous au lancement.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-2 md:flex-row md:items-center">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="quiz-is-public"
-                  checked={Boolean(quiz.is_public)}
-                  disabled={visibilityBusy}
-                  onCheckedChange={async (checked) => {
-                    setVisibilityError(null)
-                    setVisibilityBusy(true)
-                    const prev = Boolean(quiz.is_public)
-                    setQuiz((q) => (q ? { ...q, is_public: checked } : q))
-                    try {
-                      const res = await updateQuizIsPublic(quizId, checked)
-                      if (!res.success) {
-                        setQuiz((q) => (q ? { ...q, is_public: prev } : q))
-                        setVisibilityError(res.error)
-                      } else {
-                        router.refresh()
-                      }
-                    } catch {
-                      setQuiz((q) => (q ? { ...q, is_public: prev } : q))
-                      setVisibilityError('Mise à jour impossible.')
-                    } finally {
-                      setVisibilityBusy(false)
-                    }
-                  }}
-                />
-                <Label htmlFor="quiz-is-public" className="cursor-pointer text-sm font-semibold">
-                  {quiz.is_public ? 'Public' : 'Privé'}
-                </Label>
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <div className="flex min-w-0 flex-1 gap-3 sm:gap-4">
+              <div
+                className={cn(
+                  'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-inner ring-2 ring-background',
+                  quiz.is_public
+                    ? 'bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {quiz.is_public ? (
+                  <Globe2 className="h-6 w-6" aria-hidden />
+                ) : (
+                  <Lock className="h-6 w-6" aria-hidden />
+                )}
               </div>
-              {visibilityBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
-              ) : null}
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Visibilité
+                </p>
+                <p className="mt-0.5 text-base font-black text-foreground">
+                  {quiz.is_public ? 'Quiz public' : 'Quiz privé'}
+                </p>
+                <p className="mt-1 max-w-xl text-sm leading-snug text-muted-foreground">
+                  {quiz.is_public ? (
+                    <>
+                      Marqué comme <strong>partageable</strong> (catalogue communautaire / intégrations à venir).
+                      Seul vous lancez les sessions ; les élèves rejoignent toujours avec le PIN.
+                    </>
+                  ) : (
+                    <>
+                      Visible <strong>uniquement pour vous</strong> dans le tableau de bord. Activez « public » pour
+                      le préparer au partage large lorsque le catalogue sera disponible.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-background/80 px-4 py-3 shadow-sm sm:justify-end">
+                <Label htmlFor="quiz-is-public" className="cursor-pointer text-sm font-semibold sm:order-2">
+                  {quiz.is_public ? 'Mode public' : 'Mode privé'}
+                </Label>
+                <div className="flex items-center gap-2 sm:order-1">
+                  <Switch
+                    id="quiz-is-public"
+                    checked={Boolean(quiz.is_public)}
+                    disabled={visibilityBusy}
+                    onCheckedChange={async (checked) => {
+                      setVisibilityError(null)
+                      setVisibilityBusy(true)
+                      const prev = Boolean(quiz.is_public)
+                      setQuiz((q) => (q ? { ...q, is_public: checked } : q))
+                      try {
+                        const res = await updateQuizIsPublic(quizId, checked)
+                        if (!res.success) {
+                          setQuiz((q) => (q ? { ...q, is_public: prev } : q))
+                          setVisibilityError(res.error)
+                        } else {
+                          router.refresh()
+                        }
+                      } catch {
+                        setQuiz((q) => (q ? { ...q, is_public: prev } : q))
+                        setVisibilityError('Mise à jour impossible.')
+                      } finally {
+                        setVisibilityBusy(false)
+                      }
+                    }}
+                  />
+                  {visibilityBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
           {visibilityError ? (
-            <p className="mt-3 text-sm text-destructive" role="alert">
-              {visibilityError}
-            </p>
+            <div className="mx-auto max-w-7xl px-4 pb-3 sm:px-6 lg:px-8">
+              <p className="text-sm text-destructive" role="alert">
+                {visibilityError}
+              </p>
+            </div>
           ) : null}
-        </section>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        <QuizViralSharePanel
+          quizId={quizId}
+          quizTitle={quiz.title ?? 'Quiz'}
+          isPublic={Boolean(quiz.is_public)}
+          questionCount={questionCount}
+        />
 
         {questionCount === 0 && (
           <div className="mb-10 rounded-2xl border-2 border-dashed border-violet-400/50 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/5 p-6">
@@ -486,22 +539,33 @@ export default function QuizEditorPage() {
               />
             </div>
             <div className="flex flex-wrap items-end gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+              <div className="min-w-[12rem]">
+                <label className="mb-2 block text-sm font-medium text-foreground" htmlFor="super-question-count">
                   Nombre de questions
                 </label>
-                <select
-                  value={superQuestionCount}
-                  onChange={(e) => setSuperQuestionCount(Number(e.target.value))}
+                <Input
+                  id="super-question-count"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={superQuestionCountStr}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, '')
+                    setSuperQuestionCountStr(v === '' ? '' : v)
+                  }}
+                  onBlur={() => {
+                    const n = parseInt(superQuestionCountStr.trim(), 10)
+                    setSuperQuestionCountStr(
+                      Number.isFinite(n) && n >= 1 ? String(n) : '1',
+                    )
+                  }}
                   disabled={superBusy || importBusy}
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-foreground"
-                >
-                  {[3, 5, 8, 10, 12, 15].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
+                  className="max-w-[10rem]"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Valeur libre (minimum 1). Les modèles IA peuvent parfois renvoyer un peu moins de questions
+                  qu’annoncé si la réponse est très longue.
+                </p>
               </div>
             </div>
 
@@ -537,7 +601,12 @@ export default function QuizEditorPage() {
               <SuperPromptPreview
                 quiz={quiz}
                 notes={superPromptText}
-                questionCount={superQuestionCount}
+                questionCount={
+                  (() => {
+                    const n = parseInt(superQuestionCountStr.trim(), 10)
+                    return Number.isFinite(n) && n >= 1 ? n : 1
+                  })()
+                }
               />
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">

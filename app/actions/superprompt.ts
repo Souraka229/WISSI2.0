@@ -208,7 +208,9 @@ export async function generateQuestionsWithSuperPrompt(
     )
   }
 
-  const count = Math.min(15, Math.max(3, Math.floor(questionCount)))
+  // Nombre de questions : pas de plafond côté app (seulement un entier ≥ 1).
+  const rawCount = Math.floor(Number(questionCount))
+  const count = Number.isFinite(rawCount) && rawCount >= 1 ? rawCount : 1
 
   const { quiz, existingCount } = await verifyQuizAccess(quizId, user.id)
 
@@ -231,7 +233,10 @@ export async function generateQuestionsWithSuperPrompt(
     throw new Error('Aucune question générée')
   }
 
-  return persistAiQuestionsToQuiz(quizId, aiQuestions, existingCount)
+  // Si le modèle renvoie plus de questions que demandé, on tronque au nombre demandé.
+  const toPersist = aiQuestions.length > count ? aiQuestions.slice(0, count) : aiQuestions
+
+  return persistAiQuestionsToQuiz(quizId, toPersist, existingCount)
 }
 
 /** Collez la réponse JSON copiée depuis ChatGPT (même format que le SuperPrompt). */

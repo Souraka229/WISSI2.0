@@ -17,7 +17,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { BarChart3, Copy, Lightbulb, Pencil, Play, Search, Trash2, UserPlus } from 'lucide-react'
+import {
+  BarChart3,
+  Copy,
+  Globe2,
+  Lightbulb,
+  Lock,
+  Pencil,
+  Play,
+  Search,
+  Share2,
+  Trash2,
+  UserPlus,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type CockpitQuizRow = {
@@ -89,6 +101,7 @@ export function DashboardQuizCockpitGrid({ quizzes }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [level, setLevel] = useState<LevelFilter>('all')
+  const [visibility, setVisibility] = useState<VisibilityFilter>('all')
   const [dupLoading, setDupLoading] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
@@ -96,9 +109,13 @@ export function DashboardQuizCockpitGrid({ quizzes }: Props) {
     return quizzes.filter((q) => {
       const matchTitle = !s || q.title.toLowerCase().includes(s)
       const matchLevel = level === 'all' || q.level === level
-      return matchTitle && matchLevel
+      const matchVis =
+        visibility === 'all' ||
+        (visibility === 'public' && q.isPublic) ||
+        (visibility === 'private' && !q.isPublic)
+      return matchTitle && matchLevel && matchVis
     })
-  }, [quizzes, search, level])
+  }, [quizzes, search, level, visibility])
 
   if (quizzes.length === 0) {
     return (
@@ -139,22 +156,43 @@ export function DashboardQuizCockpitGrid({ quizzes }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {LEVEL_CHIPS.map((chip) => (
-          <button
-            key={chip.value}
-            type="button"
-            onClick={() => setLevel(chip.value)}
-            className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
-              level === chip.value
-                ? 'border-violet-500 bg-violet-500/15 text-violet-800 dark:text-violet-200'
-                : 'border-border bg-card text-muted-foreground hover:bg-muted/80',
-            )}
-          >
-            {chip.label}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Visibilité</p>
+        <div className="flex flex-wrap gap-2">
+          {VISIBILITY_CHIPS.map((chip) => (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setVisibility(chip.value)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                visibility === chip.value
+                  ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-900 dark:text-emerald-200'
+                  : 'border-border bg-card text-muted-foreground hover:bg-muted/80',
+              )}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Niveau</p>
+        <div className="flex flex-wrap gap-2">
+          {LEVEL_CHIPS.map((chip) => (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setLevel(chip.value)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                level === chip.value
+                  ? 'border-violet-500 bg-violet-500/15 text-violet-800 dark:text-violet-200'
+                  : 'border-border bg-card text-muted-foreground hover:bg-muted/80',
+              )}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -168,7 +206,31 @@ export function DashboardQuizCockpitGrid({ quizzes }: Props) {
               key={quiz.id}
               className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all hover:border-violet-500/30 hover:shadow-md"
             >
-              <div className="flex h-24 items-center justify-center bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-orange-500/10">
+              <div
+                className={cn(
+                  'relative flex h-24 items-center justify-center bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-orange-500/10',
+                  quiz.isPublic && 'from-emerald-500/20 via-violet-500/10 to-fuchsia-500/10',
+                )}
+              >
+                <div className="absolute right-3 top-3">
+                  {quiz.isPublic ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-900 shadow-sm dark:text-emerald-100"
+                      title="Quiz public — marqué comme partageable"
+                    >
+                      <Globe2 className="h-3 w-3" aria-hidden />
+                      Public
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground shadow-sm"
+                      title="Quiz privé — visible seulement pour vous"
+                    >
+                      <Lock className="h-3 w-3" aria-hidden />
+                      Privé
+                    </span>
+                  )}
+                </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-background/80 shadow-inner ring-1 ring-border">
                   <BarChart3 className="h-6 w-6 text-violet-600 dark:text-violet-400" />
                 </div>
@@ -289,6 +351,15 @@ export function DashboardQuizCockpitGrid({ quizzes }: Props) {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
+
+                {quiz.isPublic ? (
+                  <Button variant="outline" size="sm" className="mt-3 w-full gap-2 text-xs font-semibold" asChild>
+                    <Link href={`/q/${quiz.id}`} target="_blank" rel="noopener noreferrer">
+                      <Share2 className="h-3.5 w-3.5" />
+                      Page virale (aperçu public)
+                    </Link>
+                  </Button>
+                ) : null}
 
                 <div className="mt-2 flex border-t border-border pt-3">
                   <Button variant="ghost" size="sm" className="flex-1 gap-1 text-xs" asChild>

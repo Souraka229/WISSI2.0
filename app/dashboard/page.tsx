@@ -19,6 +19,7 @@ type QuizRowWithCount = {
   level: string | null
   theme: string | null
   created_at: string
+  is_public?: boolean | null
   questions?: { count: number }[] | null
 }
 
@@ -147,6 +148,7 @@ async function DashboardCockpitLoader({ userId, userEmail }: { userId: string; u
       description: q.description,
       level: q.level,
       theme: q.theme,
+      isPublic: Boolean(q.is_public),
       questionCount: typeof q.questions?.[0]?.count === 'number' ? q.questions[0].count : 0,
       createdAtIso: q.created_at,
       lastSessionLabel: lastIso ? formatShortDate(lastIso) : null,

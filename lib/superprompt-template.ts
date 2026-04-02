@@ -7,7 +7,8 @@ export function buildSuperPromptForExternalChat(params: {
 }): string {
   const { quizTitle, quizTheme, notes, questionCount } = params
   const theme = quizTheme?.trim() || 'général'
-  const n = Math.min(15, Math.max(3, Math.floor(questionCount)))
+  const raw = Math.floor(Number(questionCount))
+  const n = Number.isFinite(raw) && raw >= 1 ? raw : 1
 
   return `Tu es un expert pédagogique. Réponds UNIQUEMENT avec un objet JSON valide : pas de texte avant ou après, pas de bloc markdown \`\`\`, uniquement le JSON.
 
