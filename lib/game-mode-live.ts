@@ -12,7 +12,7 @@ export function normalizeLiveGameMode(raw: string | null | undefined): LiveGameM
 export function liveModeLabel(mode: string | null | undefined): string {
   const m = normalizeLiveGameMode(mode)
   if (m === 'hackathon') return 'Hackathon live'
-  if (m === 'prof_dual') return 'Double défi (2 quiz)'
+  if (m === 'prof_dual') return 'Double défi'
   return 'Challenge libre'
 }
 
@@ -27,7 +27,7 @@ export const LIVE_MODE_STICKERS: Record<
       'border-emerald-500/40 bg-gradient-to-r from-emerald-500/20 to-teal-500/15 text-emerald-900 dark:text-emerald-100',
   },
   prof_dual: {
-    short: '2 quiz',
+    short: 'Défi',
     emoji: '⚡',
     className:
       'border-amber-500/45 bg-gradient-to-r from-amber-500/25 to-orange-500/15 text-amber-950 dark:text-amber-100',

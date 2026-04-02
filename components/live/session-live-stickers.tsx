@@ -37,7 +37,7 @@ export function SessionLiveStickers({ gameMode, className, size = 'md' }: Props)
         )}
       >
         {cfg.emoji ? <span aria-hidden>{cfg.emoji}</span> : null}
-        {m === 'hackathon' ? 'Hackathon' : m === 'prof_dual' ? 'Double quiz' : 'Classe'}
+        {m === 'hackathon' ? 'Hackathon' : m === 'prof_dual' ? 'Double défi' : 'Classe'}
       </span>
     </div>
   )

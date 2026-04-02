@@ -408,22 +408,25 @@ export async function startSession(
   const gameMode = options?.gameMode ?? 'challenge_free'
   let secondaryQuizId: string | null = null
 
-  const needsSecondQuiz = gameMode === 'prof_dual' || gameMode === 'hackathon'
+  const isDualStyleMode = gameMode === 'prof_dual' || gameMode === 'hackathon'
 
-  if (needsSecondQuiz) {
+  if (isDualStyleMode) {
     const sid = options?.secondaryQuizId
-    if (!sid || sid === quizId) {
-      throw new Error('Choisissez un deuxième quiz différent pour le mode double quiz ou hackathon')
+    const sidStr = typeof sid === 'string' ? sid.trim() : ''
+    if (sidStr.length > 0) {
+      if (sidStr === quizId) {
+        throw new Error('Le deuxième quiz doit être différent du quiz principal.')
+      }
+      const { data: q2, error: e2 } = await supabase
+        .from('quizzes')
+        .select('id')
+        .eq('id', sidStr)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (e2) throw e2
+      if (!q2) throw new Error('Le deuxième quiz est introuvable ou ne vous appartient pas')
+      secondaryQuizId = sidStr
     }
-    const { data: q2, error: e2 } = await supabase
-      .from('quizzes')
-      .select('id')
-      .eq('id', sid)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (e2) throw e2
-    if (!q2) throw new Error('Le deuxième quiz est introuvable ou ne vous appartient pas')
-    secondaryQuizId = sid
   }
 
   const maxAttempts = 10
@@ -440,7 +443,7 @@ export async function startSession(
       scoring_mode: scoringMode,
     }
 
-    if (needsSecondQuiz && secondaryQuizId) {
+    if (isDualStyleMode) {
       insertPayload.game_mode = gameMode
       insertPayload.secondary_quiz_id = secondaryQuizId
     } else {

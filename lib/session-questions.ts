@@ -15,7 +15,7 @@ export type FetchMergedSessionQuestionsOptions = {
   columns?: string
 }
 
-/** Liste linéaire des questions : quiz principal puis second défi (mode prof_dual). */
+/** Liste linéaire : quiz principal, puis questions du second quiz si `secondary_quiz_id` est renseigné (modes prof_dual / hackathon). */
 export async function fetchMergedSessionQuestions(
   supabase: SupabaseClient,
   session: SessionRow,

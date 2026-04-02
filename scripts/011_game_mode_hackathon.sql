@@ -8,4 +8,4 @@ alter table public.sessions
   check (game_mode in ('challenge_free', 'prof_dual', 'hackathon'));
 
 comment on column public.sessions.game_mode is
-  'challenge_free | prof_dual | hackathon (hackathon = intense / 2 quiz, comme prof_dual).';
+  'challenge_free | prof_dual | hackathon. secondary_quiz_id optionnel : un seul quiz possible (stickers / ambiance).';

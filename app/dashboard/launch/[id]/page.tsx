@@ -52,18 +52,16 @@ export default function LaunchPage() {
   const handleLaunchSession = async () => {
     if (!quiz) return
 
-    if ((gameMode === 'prof_dual' || gameMode === 'hackathon') && !secondaryQuizId) {
-      setLaunchError('Choisissez le deuxième quiz pour ce mode (double quiz).')
-      return
-    }
-
     setIsLaunching(true)
     setLaunchError(null)
     try {
+      const secondary =
+        gameMode === 'prof_dual' || gameMode === 'hackathon'
+          ? secondaryQuizId.trim() || null
+          : null
       const newSession = await startSession(quizId, {
         gameMode,
-        secondaryQuizId:
-          gameMode === 'prof_dual' || gameMode === 'hackathon' ? secondaryQuizId : null,
+        secondaryQuizId: secondary,
         scoringMode,
       })
       if (!newSession?.id) {
@@ -258,11 +256,12 @@ export default function LaunchPage() {
                       Double défi
                       <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100">
                         <Zap className="h-3 w-3" />
-                        2 quiz
+                        Live défi
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Enchaîne deux quiz à la suite (même énergie qu’un mini-hackathon pédagogique).
+                      Sticker et ambiance « double défi ». Tu peux enchaîner un second quiz en bas, ou lancer avec
+                      ce quiz seul.
                     </span>
                   </span>
                 </label>
@@ -283,32 +282,31 @@ export default function LaunchPage() {
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Deux quiz enchaînés, rythme soutenu — idéal pour dynamiser une salle ou un événement.
+                      Ambiance intense + sticker hackathon. Second quiz facultatif pour enchaîner plus longtemps.
                     </span>
                   </span>
                 </label>
                 {(gameMode === 'prof_dual' || gameMode === 'hackathon') && (
                   <div>
                     <label className="mb-2 block text-xs font-medium text-muted-foreground">
-                      Deuxième quiz
+                      Deuxième quiz <span className="font-normal text-muted-foreground/80">(facultatif)</span>
                     </label>
                     <select
                       value={secondaryQuizId}
                       onChange={(e) => setSecondaryQuizId(e.target.value)}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm"
                     >
-                      <option value="">— Choisir —</option>
+                      <option value="">— Aucun : un seul quiz avec ce mode —</option>
                       {otherQuizzes.map((q) => (
                         <option key={q.id} value={q.id}>
                           {q.title}
                         </option>
                       ))}
                     </select>
-                    {otherQuizzes.length === 0 && (
-                      <p className="mt-2 text-xs text-destructive">
-                        Créez un autre quiz pour utiliser ce mode.
-                      </p>
-                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Sans choix, la session utilise uniquement le quiz que tu lances ; le mode change surtout
+                      l’étiquette live et l’ambiance affichée.
+                    </p>
                   </div>
                 )}
               </div>
