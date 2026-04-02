@@ -15,11 +15,12 @@ export function JoinQrCode({ pin, size = 192, className }: JoinQrCodeProps) {
 
   useEffect(() => {
     if (!pin) return
-    const envBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+    // Toujours privilégier l’origine actuelle : si NEXT_PUBLIC_APP_URL pointe vers un autre
+    // déploiement, le QR envoyait les joueurs ailleurs → « code invalide » (autre projet / cache).
     const origin =
-      envBase ||
-      (typeof window !== 'undefined' ? window.location.origin : '') ||
-      ''
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || ''
     if (!origin) return
     setJoinUrl(`${origin}/join?pin=${encodeURIComponent(pin)}`)
   }, [pin])

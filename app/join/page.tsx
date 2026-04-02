@@ -19,19 +19,23 @@ function JoinForm() {
   const [fromScan, setFromScan] = useState(false)
   const autoCheckRef = useRef<string | null>(null)
 
-  function normalizePinFromSearch(raw: string | null) {
+  /** PIN session : 6 chiffres (cf. startSession). */
+  function normalizePin(raw: string | null | undefined) {
     return (raw?.trim() ?? '').replace(/\D/g, '').slice(0, 6)
   }
 
+  const PIN_LENGTH = 6
+
   useEffect(() => {
-    const pin = normalizePinFromSearch(searchParams.get('pin'))
+    const pin = normalizePin(searchParams.get('pin'))
     if (pin) setPinCode(pin)
   }, [searchParams])
 
   /** Après scan du QR : le PIN est dans l’URL → on vérifie tout de suite, il ne reste que le pseudo. */
   useEffect(() => {
-    const pin = normalizePinFromSearch(searchParams.get('pin'))
-    if (!pin || pin.length < 4) return
+    const pin = normalizePin(searchParams.get('pin'))
+    // N’auto-vérifier qu’avec un PIN complet (6 chiffres), sinon faux négatifs / requêtes inutiles.
+    if (!pin || pin.length !== PIN_LENGTH) return
     if (autoCheckRef.current === pin) return
     autoCheckRef.current = pin
 
@@ -46,11 +50,22 @@ function JoinForm() {
           .from('sessions')
           .select('id,status')
           .eq('pin_code', pin)
-          .single()
+          .maybeSingle()
 
         if (cancelled) return
-        if (queryError || !data) {
-          setError('Code invalide ou lien incorrect.')
+        if (queryError) {
+          console.error('[join] lookup session', queryError)
+          setError(
+            'Impossible de joindre le serveur. Vérifiez la connexion ou la configuration Supabase.',
+          )
+          setStep('pin')
+          autoCheckRef.current = null
+          return
+        }
+        if (!data) {
+          setError(
+            'Code invalide ou lien incorrect. Vérifiez le PIN, ou ouvrez le lien sur le même site que l’animateur (scan du QR sur place).',
+          )
           setStep('pin')
           autoCheckRef.current = null
           return
@@ -62,8 +77,9 @@ function JoinForm() {
           return
         }
         setStep('nickname')
-      } catch {
+      } catch (e) {
         if (!cancelled) {
+          console.error('[join] verify', e)
           setError('Impossible de vérifier le code. Réessayez.')
           setStep('pin')
           autoCheckRef.current = null
@@ -80,6 +96,12 @@ function JoinForm() {
 
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const pin = normalizePin(pinCode)
+    if (pin.length !== PIN_LENGTH) {
+      setError(`Le code PIN doit comporter ${PIN_LENGTH} chiffres.`)
+      return
+    }
+
     setIsLoading(true)
     setError('')
 
@@ -88,21 +110,28 @@ function JoinForm() {
       const { data, error: queryError } = await supabase
         .from('sessions')
         .select('*')
-        .eq('pin_code', pinCode.trim())
-        .single()
+        .eq('pin_code', pin)
+        .maybeSingle()
 
-      if (queryError || !data) {
-        setError('Code PIN invalide. Vérifiez et réessayez.')
-        setIsLoading(false)
+      if (queryError) {
+        console.error('[join] pin submit', queryError)
+        setError('Erreur réseau ou serveur. Réessayez dans un instant.')
+        return
+      }
+
+      if (!data) {
+        setError(
+          'Code PIN introuvable. Si vous avez scanné un QR code, assurez-vous d’être sur le même site que votre enseignant.',
+        )
         return
       }
 
       if (data.status === 'finished') {
         setError('Cette session est déjà terminée.')
-        setIsLoading(false)
         return
       }
 
+      setPinCode(pin)
       setStep('nickname')
     } catch (err) {
       console.error('Error:', err)
@@ -120,15 +149,29 @@ function JoinForm() {
     setError('')
 
     try {
+      const pin = normalizePin(pinCode)
+      if (pin.length !== PIN_LENGTH) {
+        setError(`Code PIN incomplet (${PIN_LENGTH} chiffres requis).`)
+        setIsLoading(false)
+        return
+      }
+
       const supabase = createClient()
-      const { data: session } = await supabase
+      const { data: session, error: sessionErr } = await supabase
         .from('sessions')
         .select('*')
-        .eq('pin_code', pinCode.trim())
-        .single()
+        .eq('pin_code', pin)
+        .maybeSingle()
+
+      if (sessionErr) {
+        console.error('[join] nickname session', sessionErr)
+        setError('Erreur lors de la lecture de la session. Réessayez.')
+        setIsLoading(false)
+        return
+      }
 
       if (!session) {
-        setError('Session introuvable. Veuillez réessayer.')
+        setError('Session introuvable. Retournez à l’étape précédente et vérifiez le code.')
         setIsLoading(false)
         return
       }
@@ -189,7 +232,7 @@ function JoinForm() {
 
           <Button
             type="submit"
-            disabled={!pinCode || isLoading}
+            disabled={normalizePin(pinCode).length !== PIN_LENGTH || isLoading}
             className="w-full bg-foreground text-background hover:bg-foreground/90 h-11"
           >
             {isLoading ? 'Vérification...' : 'Continuer'}
