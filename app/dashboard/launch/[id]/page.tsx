@@ -211,8 +211,8 @@ export default function LaunchPage() {
                     Précision — plein pot si bonne réponse dans la 1re moitié du chrono, sinon ~55 % du max
                   </option>
                   <option value="speed">
-                    Vitesse — bonne réponse : entre ~25 % et 100 % du max selon la rapidité (linéaire sur le
-                    temps)
+                    Vitesse — style Kahoot : bonne réponse = points qui décroissent avec le temps (0 → max,
+                    fin du chrono → 0)
                   </option>
                 </select>
               </div>

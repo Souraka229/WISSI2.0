@@ -9,6 +9,29 @@ export async function GET(
   const supabase = await createClient()
 
   try {
+    // Get session details first (gatekeeping)
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionError) throw sessionError
+
+    // Allow results only when session finished OR requester is the host
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const isHost = Boolean(user?.id && session?.host_id && user.id === session.host_id)
+    const isFinished = String(session?.status ?? '') === 'finished'
+
+    if (!isFinished && !isHost) {
+      return NextResponse.json(
+        { error: 'Résultats indisponibles pendant le live.' },
+        { status: 403 },
+      )
+    }
+
     // Get all answers for the session
     const { data: answers, error: answersError } = await supabase
       .from('answers')
@@ -23,15 +46,6 @@ export async function GET(
       .order('points_earned', { ascending: false })
 
     if (answersError) throw answersError
-
-    // Get session details
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('id', sessionId)
-      .single()
-
-    if (sessionError) throw sessionError
 
     // Get all participants
     const { data: participants, error: participantsError } = await supabase

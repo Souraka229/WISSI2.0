@@ -67,7 +67,12 @@ export default function ResultsPage() {
     const loadResults = async () => {
       try {
         const response = await fetch(`/api/sessions/${sessionId}/results`)
-        if (!response.ok) throw new Error('Échec du chargement des résultats')
+        if (!response.ok) {
+          if (response.status === 403) {
+            throw new Error('Résultats indisponibles pendant le live. Attendez la fin de la partie.')
+          }
+          throw new Error('Échec du chargement des résultats')
+        }
         const data = (await response.json()) as ResultsPayload
         setResults(data)
       } catch (err) {
@@ -150,7 +155,10 @@ export default function ResultsPage() {
     } catch {
       // ignore (fallback WhatsApp)
     }
-    window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+    // Sur certains mobiles/ navigateurs, window.open peut être bloqué.
+    window.location.assign(
+      `https://wa.me/?text=${encodeURIComponent(whatsappText)}`,
+    )
   }
 
   const copyResultsLink = async () => {

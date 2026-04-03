@@ -29,15 +29,20 @@ export function computeAnswerPoints(params: {
   const t = Math.max(0, Math.min(Math.floor(params.timeTakenSec), budget))
 
   if (mode === 'speed') {
-    // t=0 → 100 % ; t=budget → 25 % (toujours un bonus si la réponse est bonne avant la fin)
-    const minFrac = 0.25
-    const speedFactor = 1 - (t / budget) * (1 - minFrac)
-    return Math.max(1, Math.round(base * speedFactor))
+    /**
+     * Logique type Kahoot (adaptée) :
+     * - t=0 → 100 % du max
+     * - t=budget → 0 pt
+     * - décroissance "smooth" (pas strictement linéaire)
+     */
+    const x = t / budget // 0..1
+    const frac = Math.max(0, 1 - Math.pow(x, 1.35))
+    return Math.max(0, Math.round(base * frac))
   }
 
   if (mode === 'precision') {
     if (t <= budget / 2) return base
-    return Math.max(1, Math.round(base * 0.55))
+    return Math.max(0, Math.round(base * 0.55))
   }
 
   // classic

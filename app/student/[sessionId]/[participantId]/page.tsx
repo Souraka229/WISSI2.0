@@ -956,8 +956,8 @@ export default function StudentPlayerPage() {
                   {String(session?.scoring_mode ?? 'classic') === 'speed' ? (
                     <p className="rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-xs font-medium text-amber-950 dark:text-amber-100">
                       Mode <strong>vitesse</strong> : plus tu réponds vite, plus tu marques de points (jusqu’au
-                      maximum de la question, ex. 1000 pts). À la fin du chrono, une bonne réponse vaut encore
-                      environ 25&nbsp;% du max.
+                      maximum de la question, ex. 1000 pts). En fin de chrono, une bonne réponse peut valoir
+                      0&nbsp;pt.
                     </p>
                   ) : null}
                   {String(session?.scoring_mode ?? 'classic') === 'precision' ? (
@@ -981,25 +981,11 @@ export default function StudentPlayerPage() {
                     >
                       {answerFeedback.kind === 'submitted' && (
                         <>
-                          {answerFeedback.correct ? (
-                            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-primary" />
-                          ) : (
-                            <p className="mb-2 text-4xl" aria-hidden>
-                              ✗
-                            </p>
-                          )}
-                          <p className="text-lg font-bold text-foreground">
-                            {answerFeedback.correct ? 'Bonne réponse !' : 'Réponse enregistrée'}
-                          </p>
-                          <p className="mt-2 text-3xl font-black tabular-nums text-primary">
-                            {answerFeedback.pointsEarned > 0 ? '+' : ''}
-                            {answerFeedback.pointsEarned} pt
-                            {answerFeedback.pointsEarned !== 1 ? 's' : ''}
-                          </p>
+                          <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-primary" />
+                          <p className="text-lg font-bold text-foreground">Réponse enregistrée</p>
                           <p className="mt-2 text-sm text-muted-foreground">
-                            {answerFeedback.correct
-                              ? 'Le détail reste visible au classement affiché par l’animateur.'
-                              : 'Ce n’était pas la bonne réponse — le classement montrera la suite.'}
+                            Le bon résultat et les points seront visibles quand l’animateur affichera le
+                            classement.
                           </p>
                         </>
                       )}
