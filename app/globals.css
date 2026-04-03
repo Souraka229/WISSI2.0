@@ -125,6 +125,44 @@
   }
 }
 
+/* Thème violet (join + live) */
+.wiaa-purple-bg {
+  background: radial-gradient(ellipse 120% 90% at 50% -10%, rgba(168, 85, 247, 0.55), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 20% 10%, rgba(99, 102, 241, 0.45), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 90% 70%, rgba(147, 51, 234, 0.35), transparent 55%),
+    linear-gradient(135deg, rgba(147, 51, 234, 0.95), rgba(79, 70, 229, 0.95));
+}
+
+.wiaa-glass-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 28px 90px rgba(17, 24, 39, 0.22),
+    0 10px 30px rgba(17, 24, 39, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.dark .wiaa-glass-card {
+  background: rgba(20, 16, 32, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.45),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.wiaa-reaction-tile {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wiaa-reaction-tile:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.wiaa-reaction-tile:active {
+  transform: translateY(1px);
+}
+
 /* Jeu live — micro-animations (sans lib externe) */
 @keyframes live-soft-pulse {
   0%,

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Download, ArrowLeft, Loader2 } from 'lucide-react'
+import { Download, ArrowLeft, Loader2, Share2, Copy, Trophy } from 'lucide-react'
 
 const ResultsPdfExportButton = dynamic(
   () =>
@@ -61,6 +61,7 @@ export default function ResultsPage() {
   const [results, setResults] = useState<ResultsPayload | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const loadResults = async () => {
@@ -123,6 +124,46 @@ export default function ResultsPage() {
     document.body.removeChild(a)
   }
 
+  const resultsUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/results/${encodeURIComponent(sessionId)}`
+      : ''
+
+  const winner = results?.participants?.[0]
+  const winnerScore = winner?.score ?? 0
+  const whatsappText =
+    winner != null
+      ? `🏆 Résultats du quiz\n\n🥇 #1 ${winner.nickname} — ${winnerScore} pts\n\nVoir le classement complet : ${resultsUrl}`
+      : `Résultats du quiz : ${resultsUrl}`
+
+  const shareWhatsApp = async () => {
+    if (!resultsUrl) return
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Résultats du quiz',
+          text: whatsappText,
+          url: resultsUrl,
+        })
+        return
+      }
+    } catch {
+      // ignore (fallback WhatsApp)
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+  }
+
+  const copyResultsLink = async () => {
+    if (!resultsUrl) return
+    try {
+      await navigator.clipboard.writeText(resultsUrl)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2200)
+    } catch {
+      // ignore
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -148,18 +189,23 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
-      <div className="sticky top-0 z-40 border-b border-border bg-card/50 backdrop-blur-sm">
+    <div className="wiaa-purple-bg min-h-screen text-white">
+      <div className="sticky top-0 z-40 border-b border-white/10 bg-white/5 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" size="icon" aria-label="Retour">
-                <ArrowLeft className="h-4 w-4" />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Retour"
+                className="text-white hover:bg-white/10 hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4 text-white" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Résultats du quiz</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <h1 className="text-3xl font-black text-white">Classement</h1>
+              <p className="mt-1 text-sm text-white/75">
                 {results.stats.totalParticipants} participant
                 {results.stats.totalParticipants !== 1 ? 's' : ''},{' '}
                 {results.stats.correctPercentage}% de précision moyenne sur les réponses
@@ -167,16 +213,39 @@ export default function ResultsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={exportAsCSV}>
-              <Download className="h-4 w-4" /> Exporter CSV
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-white/20 bg-white/8 text-white hover:bg-white/12"
+              onClick={shareWhatsApp}
+            >
+              <Share2 className="h-4 w-4" /> Partager WhatsApp
             </Button>
-            <ResultsPdfExportButton results={results} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-white/20 bg-white/8 text-white hover:bg-white/12"
+              onClick={() => void copyResultsLink()}
+            >
+              <Copy className="h-4 w-4" /> {copied ? 'Lien copié' : 'Copier le lien'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-white/20 bg-white/8 text-white hover:bg-white/12"
+              onClick={exportAsCSV}
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+            <div className="hidden sm:block">
+              <ResultsPdfExportButton results={results} />
+            </div>
           </div>
         </div>
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-12 grid gap-6 md:grid-cols-4">
+        <div className="mb-10 grid gap-6 md:grid-cols-4">
           <StatCard label="Participants" value={results.stats.totalParticipants} icon="👥" />
           <StatCard label="Score moyen" value={results.stats.averageScore} icon="📊" />
           <StatCard
@@ -187,12 +256,36 @@ export default function ResultsPage() {
           <StatCard label="Précision globale" value={`${results.stats.correctPercentage}%`} icon="🎯" />
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="border-b border-border px-8 py-6">
-            <h2 className="text-2xl font-bold text-foreground">Classement</h2>
+        {winner ? (
+          <div className="mb-8 overflow-hidden rounded-3xl border border-white/15 bg-white/8 p-6 shadow-2xl backdrop-blur-md sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/20 text-amber-200">
+                  <Trophy className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+                    Meilleur joueur
+                  </p>
+                  <p className="text-2xl font-black text-white sm:text-3xl">{winner.nickname}</p>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-5 py-3 text-center sm:text-right">
+                <p className="text-sm font-bold text-white/70">Score</p>
+                <p className="text-4xl font-black tabular-nums text-amber-200">{winnerScore} pts</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-3xl border border-white/12 bg-white/6 backdrop-blur-md">
+          <div className="border-b border-white/10 px-6 py-5 sm:px-8 sm:py-6">
+            <h2 className="flex items-center gap-2 text-2xl font-black text-white">
+              <Trophy className="h-5 w-5 text-amber-200" /> Classement complet
+            </h2>
           </div>
 
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-white/10">
             {results.participants.map((participant, idx) => {
               const participantAnswers = results.answers.filter(
                 (a) => a.participant_id === participant.id,
@@ -206,15 +299,15 @@ export default function ResultsPage() {
               return (
                 <div
                   key={participant.id}
-                  className="flex flex-col gap-4 px-8 py-6 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 px-6 py-5 transition-colors hover:bg-white/6 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6"
                 >
                   <div className="flex items-center gap-6">
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-secondary text-lg font-bold text-white">
                       {idx < 3 ? <span>{'🥇🥈🥉'[idx]}</span> : idx + 1}
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-foreground">{participant.nickname}</p>
-                      <div className="mt-1 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                      <p className="text-lg font-bold text-white">{participant.nickname}</p>
+                      <div className="mt-1 flex flex-wrap gap-4 text-sm text-white/70">
                         <span>Meilleure série : {participant.max_streak ?? 0}</span>
                         <span>•</span>
                         <span>Réponses : {participantAnswers.length}</span>
@@ -223,8 +316,10 @@ export default function ResultsPage() {
                   </div>
 
                   <div className="text-right sm:text-right">
-                    <p className="text-3xl font-bold text-primary">{participant.score ?? 0}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-3xl font-black tabular-nums text-white">
+                      {participant.score ?? 0}
+                    </p>
+                    <p className="text-sm text-white/70">
                       {correctCount}/{participantAnswers.length} bonnes ({accuracy}%)
                     </p>
                   </div>
@@ -248,11 +343,11 @@ function StatCard({
   icon: string
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="rounded-2xl border border-white/15 bg-white/8 p-6 backdrop-blur-md">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <p className="mb-1 text-sm text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold text-foreground">{value}</p>
+          <p className="mb-1 text-sm text-white/70">{label}</p>
+          <p className="text-3xl font-black tabular-nums text-white">{value}</p>
         </div>
         <span className="text-3xl">{icon}</span>
       </div>

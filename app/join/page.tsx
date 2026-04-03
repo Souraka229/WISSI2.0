@@ -220,10 +220,8 @@ function JoinForm() {
     <>
       {step === 'pin' ? (
         <form onSubmit={handlePinSubmit}>
-          <h1 className="text-3xl font-bold mb-2">Rejoindre un quiz</h1>
-          <p className="text-muted-foreground mb-8">
-            Code PIN affiché ou scanné depuis le QR code du professeur
-          </p>
+          <h1 className="text-3xl font-black mb-2">Rejoindre la partie</h1>
+          <p className="text-muted-foreground mb-8">Entre le code PIN affiché par l’admin.</p>
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">Code PIN</label>
@@ -238,7 +236,7 @@ function JoinForm() {
               inputMode="numeric"
               pattern="[0-9]*"
               disabled={isLoading}
-              className="text-center text-2xl font-bold tracking-widest bg-input border-border h-14"
+              className="text-center text-2xl font-black tracking-[0.3em] bg-white/70 dark:bg-white/10 border-border h-14 rounded-xl"
               autoFocus
             />
           </div>
@@ -252,9 +250,9 @@ function JoinForm() {
           <Button
             type="submit"
             disabled={normalizePin(pinCode).length !== PIN_LENGTH || isLoading}
-            className="w-full bg-foreground text-background hover:bg-foreground/90 h-11"
+            className="w-full bg-violet-600 text-white hover:bg-violet-600/90 h-12 rounded-xl font-bold"
           >
-            {isLoading ? 'Vérification...' : 'Continuer'}
+            {isLoading ? 'Vérification...' : 'Entrer dans la partie'}
           </Button>
         </form>
       ) : (
@@ -264,7 +262,7 @@ function JoinForm() {
               QR scanné · session trouvée
             </div>
           )}
-          <h1 className="text-3xl font-bold mb-2">Votre pseudo</h1>
+          <h1 className="text-3xl font-black mb-2">Ton pseudo</h1>
           <p className="text-muted-foreground mb-6">
             C&apos;est ainsi que vous apparaîtrez dans le classement. Le code est déjà
             renseigné.
@@ -297,7 +295,7 @@ function JoinForm() {
             <Button
               type="button"
               variant="outline"
-              className="flex-1 border-border h-11"
+              className="flex-1 border-border h-12 rounded-xl"
               onClick={() => {
                 setStep('pin')
                 setError('')
@@ -311,7 +309,7 @@ function JoinForm() {
             <Button
               type="submit"
               disabled={!nickname || isLoading}
-              className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90 h-11"
+              className="flex-1 bg-violet-600 text-white hover:bg-violet-600/90 h-12 rounded-xl font-bold"
             >
               {isLoading ? 'Connexion...' : 'Rejoindre'}
             </Button>
@@ -337,28 +335,27 @@ function LoadingFallback() {
 
 export default function JoinPage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Back Link */}
-      <div className="p-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Retour à l&apos;accueil
+    <div className="wiaa-purple-bg min-h-screen text-white">
+      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-6 py-8">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm text-white/75 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Retour
         </Link>
-      </div>
 
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-              <span className="text-background font-bold text-sm">Q</span>
+        <div className="flex flex-1 items-center justify-center py-10">
+          <div className="wiaa-glass-card w-full max-w-md rounded-2xl px-6 py-10 text-center text-foreground">
+            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-700 dark:text-violet-200">
+              <span className="text-2xl" aria-hidden>
+                🎮
+              </span>
             </div>
-            <span className="text-lg font-semibold">SCITI-Quiz</span>
+            <Suspense fallback={<LoadingFallback />}>
+              <JoinForm />
+            </Suspense>
           </div>
-
-          <Suspense fallback={<LoadingFallback />}>
-            <JoinForm />
-          </Suspense>
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@ import {
 } from '@/lib/session-questions'
 import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
 import { liveMcqTileClass } from '@/lib/live-mcq-colors'
-import { submitAnswer, getSessionLeaderboard } from '@/app/actions/quiz'
+import { addReaction, submitAnswer, getSessionLeaderboard } from '@/app/actions/quiz'
 import { SessionLiveStickers } from '@/components/live/session-live-stickers'
 import { Button } from '@/components/ui/button'
 import {
@@ -69,6 +69,7 @@ export default function StudentPlayerPage() {
   const [answered, setAnswered] = useState(false)
   const [timeLeft, setTimeLeft] = useState(30)
   const [recentReactions, setRecentReactions] = useState<string[]>([])
+  const [reactionLeft, setReactionLeft] = useState(3)
   const [onlineCount, setOnlineCount] = useState(1)
   const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<
@@ -279,6 +280,28 @@ export default function StudentPlayerPage() {
   const sessionGameMode = session ? String(session.game_mode ?? '') : ''
   const qIndex = session ? Number(session.current_question_index ?? 0) : 0
   const currentQuestion = questions[qIndex]
+
+  const reactionsEnabled = Boolean((session as any)?.reactions_enabled ?? true)
+  const REACTION_EMOJIS = ['🔥', '❤️', '😂', '👏', '😱', '🎉', '💪', '🤯'] as const
+
+  useEffect(() => {
+    setReactionLeft(3)
+  }, [status, qIndex])
+
+  const sendReaction = useCallback(
+    async (emoji: string) => {
+      if (!reactionsEnabled) return
+      if (reactionLeft <= 0) return
+      setReactionLeft((v) => Math.max(0, v - 1))
+      try {
+        await addReaction(sessionId, participantId, emoji)
+      } catch (e) {
+        console.error('[student] addReaction', e)
+        setReactionLeft((v) => Math.min(3, v + 1))
+      }
+    },
+    [participantId, reactionsEnabled, reactionLeft, sessionId],
+  )
 
   /** Quand on quitte la salle d’attente : charger les questions (pas au premier chargement si waiting). */
   const quizIdForLoad =
@@ -590,7 +613,7 @@ export default function StudentPlayerPage() {
 
   if (status === 'waiting') {
     return (
-      <div className="live-lobby-bg relative min-h-[100dvh] overflow-hidden px-4 pb-10 pt-[max(1.5rem,env(safe-area-inset-top,0px))] sm:px-6">
+      <div className="wiaa-purple-bg relative min-h-[100dvh] overflow-hidden px-4 pb-10 pt-[max(1.5rem,env(safe-area-inset-top,0px))] text-white sm:px-6">
         <div
           className="live-lobby-orb pointer-events-none absolute -right-24 top-20 h-72 w-72 rounded-full bg-fuchsia-500/20 blur-3xl dark:bg-fuchsia-400/15"
           aria-hidden
@@ -599,57 +622,59 @@ export default function StudentPlayerPage() {
           className="live-lobby-orb pointer-events-none absolute -left-32 bottom-32 h-80 w-80 rounded-full bg-violet-500/20 blur-3xl [animation-delay:-5s] dark:bg-violet-400/15"
           aria-hidden
         />
-        <div className="relative mx-auto flex max-w-lg flex-col space-y-8 text-center sm:max-w-xl animate-in slide-in-from-bottom-4 duration-500">
+        <div className="relative mx-auto flex max-w-3xl flex-col items-center justify-center gap-6 py-10 text-center animate-in fade-in zoom-in-95 duration-500">
           <div className="flex justify-center">
             <SessionLiveStickers gameMode={sessionGameMode} />
           </div>
-          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
-            <div className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/25 bg-card/80 px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inline-flex sm:py-2.5">
-              <Users className="h-5 w-5 shrink-0 text-primary" />
-              <span className="font-semibold">
-                <span className="tabular-nums">{onlineCount}</span> en ligne
-              </span>
-            </div>
-            <div className="flex justify-center sm:justify-start">{liveRealtimeBadge}</div>
+
+          <div className="relative">
+            <div className="absolute inset-0 -z-10 rounded-full bg-white/10 blur-2xl" aria-hidden />
+            <Loader2 className="mx-auto h-14 w-14 animate-spin text-white/90" />
           </div>
-          <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary/80">Presque prêt</p>
-            <h1 className="text-4xl font-black leading-[1.1] tracking-tight sm:text-5xl">Salle d’attente</h1>
-            <p className="mx-auto max-w-sm text-base leading-relaxed text-muted-foreground sm:max-w-md sm:text-lg">
-              Salut <span className="font-bold text-foreground">{me?.nickname}</span>
-              <span className="hidden sm:inline"> — </span>
-              <span className="block sm:inline">dès que l’animateur lance, les questions s’affichent ici.</span>
-            </p>
+
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Prêt !</h1>
+            <p className="text-white/75">En attente du lancement par l’admin…</p>
           </div>
-          <div className="rounded-3xl border border-white/20 bg-card/90 p-6 text-left shadow-2xl ring-1 ring-primary/10 backdrop-blur-md dark:border-white/10">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ton classement</p>
-            <div className="mt-4 grid grid-cols-1 gap-3 text-center min-[400px]:grid-cols-3 sm:gap-4 min-[400px]:divide-x min-[400px]:divide-border">
-              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
-                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Rang</p>
-                <p className="mt-1 text-2xl font-black tabular-nums text-primary sm:text-3xl">#{myRank ?? '—'}</p>
-              </div>
-              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
-                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Niveau</p>
-                <p className="mt-1 text-2xl font-black tabular-nums sm:text-3xl">{me?.level ?? 1}</p>
-              </div>
-              <div className="rounded-xl bg-muted/40 py-3 min-[400px]:bg-transparent min-[400px]:py-0">
-                <p className="text-[10px] font-semibold uppercase text-muted-foreground">Points</p>
-                <p className="mt-1 text-2xl font-black tabular-nums sm:text-3xl">{me?.score ?? 0}</p>
-              </div>
-            </div>
-            {typeof me?.streak === 'number' && me.streak > 0 && (
-              <p className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-orange-500/15 py-2.5 text-sm font-bold text-orange-700 dark:text-orange-300">
-                <Flame className="h-5 w-5 shrink-0" />
-                Série : {me.streak} bonne(s) réponse(s)
-              </p>
-            )}
-          </div>
+
           <div className="flex flex-col items-center gap-2">
-            <div className="flex h-1.5 w-32 overflow-hidden rounded-full bg-muted">
-              <div className="live-waiting-pulse h-full w-1/2 rounded-full bg-primary" />
+            <div className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold">
+              {me?.nickname ?? 'Joueur'}{' '}
+              <span className="font-normal text-white/70">· joueur connecté</span>
             </div>
-            <p className="text-sm font-semibold text-muted-foreground">En attente du lancement…</p>
+            <div className="flex items-center justify-center gap-3 text-xs text-white/70">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
+                <Users className="h-4 w-4" />
+                <span className="tabular-nums font-bold text-white">{onlineCount}</span> en ligne
+              </span>
+              {liveRealtimeBadge}
+            </div>
           </div>
+
+          {reactionsEnabled ? (
+            <div className="mt-6 w-full max-w-2xl rounded-3xl bg-white/8 p-5 backdrop-blur-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-white/70">Réactions</p>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold tabular-nums text-white/85">
+                  {reactionLeft} restants
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+                {REACTION_EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    className="wiaa-reaction-tile touch-manipulation rounded-2xl py-3 text-2xl transition disabled:opacity-35"
+                    onClick={() => void sendReaction(e)}
+                    disabled={reactionLeft <= 0}
+                    aria-label={`Réagir ${e}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     )
