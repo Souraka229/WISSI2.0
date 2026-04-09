@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Download, ArrowLeft, Loader2, Share2, Copy, Trophy } from 'lucide-react'
+import { computeSessionXp, gradeFromXp } from '@/lib/prof-xp'
 
 const ResultsPdfExportButton = dynamic(
   () =>
@@ -24,6 +25,7 @@ type SessionRow = {
   id: string
   current_question_index: number
   pin_code?: string | null
+  game_mode?: string | null
 }
 
 type ParticipantRow = {
@@ -136,6 +138,13 @@ export default function ResultsPage() {
 
   const winner = results?.participants?.[0]
   const winnerScore = winner?.score ?? 0
+  const sessionXp = computeSessionXp({
+    connected: results?.stats.totalParticipants ?? 0,
+    answers: results?.stats.totalAnswers ?? 0,
+    correctRatePercent: results?.stats.correctPercentage ?? 0,
+    mode: results?.session.game_mode,
+  })
+  const projectedGrade = gradeFromXp(sessionXp)
   const whatsappText =
     winner != null
       ? `🏆 Résultats du quiz\n\n🥇 #1 ${winner.nickname} — ${winnerScore} pts\n\nVoir le classement complet : ${resultsUrl}`
@@ -212,7 +221,7 @@ export default function ResultsPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-black text-white">Classement</h1>
+              <h1 className="text-3xl font-black text-white">Résultats de session</h1>
               <p className="mt-1 text-sm text-white/75">
                 {results.stats.totalParticipants} participant
                 {results.stats.totalParticipants !== 1 ? 's' : ''},{' '}
@@ -253,7 +262,7 @@ export default function ResultsPage() {
       </div>
 
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-10 grid gap-6 md:grid-cols-4">
+        <div className="mb-10 grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-4 md:gap-6">
           <StatCard label="Participants" value={results.stats.totalParticipants} icon="👥" />
           <StatCard label="Score moyen" value={results.stats.averageScore} icon="📊" />
           <StatCard
@@ -262,6 +271,20 @@ export default function ResultsPage() {
             icon="✅"
           />
           <StatCard label="Précision globale" value={`${results.stats.correctPercentage}%`} icon="🎯" />
+        </div>
+
+        <div className="mb-10 rounded-2xl border border-white/15 bg-white/8 p-6 backdrop-blur-md">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+            Rapport pédagogique (prof)
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-white/80">
+              XP estimée session: <span className="font-black text-white">{sessionXp}</span>
+            </p>
+            <p className="text-sm text-white/80">
+              Grade projeté: <span className="font-black text-white">{projectedGrade}</span>
+            </p>
+          </div>
         </div>
 
         {winner ? (
@@ -286,55 +309,11 @@ export default function ResultsPage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-3xl border border-white/12 bg-white/6 backdrop-blur-md">
-          <div className="border-b border-white/10 px-6 py-5 sm:px-8 sm:py-6">
-            <h2 className="flex items-center gap-2 text-2xl font-black text-white">
-              <Trophy className="h-5 w-5 text-amber-200" /> Classement complet
-            </h2>
-          </div>
-
-          <div className="divide-y divide-white/10">
-            {results.participants.map((participant, idx) => {
-              const participantAnswers = results.answers.filter(
-                (a) => a.participant_id === participant.id,
-              )
-              const correctCount = participantAnswers.filter((a) => a.is_correct).length
-              const accuracy =
-                participantAnswers.length > 0
-                  ? Math.round((correctCount / participantAnswers.length) * 100)
-                  : 0
-
-              return (
-                <div
-                  key={participant.id}
-                  className="flex flex-col gap-4 px-6 py-5 transition-colors hover:bg-white/6 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6"
-                >
-                  <div className="flex items-center gap-6">
-                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-secondary text-lg font-bold text-white">
-                      {idx < 3 ? <span>{'🥇🥈🥉'[idx]}</span> : idx + 1}
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-white">{participant.nickname}</p>
-                      <div className="mt-1 flex flex-wrap gap-4 text-sm text-white/70">
-                        <span>Meilleure série : {participant.max_streak ?? 0}</span>
-                        <span>•</span>
-                        <span>Réponses : {participantAnswers.length}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right sm:text-right">
-                    <p className="text-3xl font-black tabular-nums text-white">
-                      {participant.score ?? 0}
-                    </p>
-                    <p className="text-sm text-white/70">
-                      {correctCount}/{participantAnswers.length} bonnes ({accuracy}%)
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+        <div className="overflow-hidden rounded-3xl border border-white/12 bg-white/6 p-6 backdrop-blur-md sm:p-8">
+          <h2 className="text-xl font-black text-white">Synthèse pédagogique</h2>
+          <p className="mt-2 text-sm text-white/75">
+            Cette version n’affiche pas de leaderboard. Les indicateurs globaux et exports restent disponibles.
+          </p>
         </div>
       </main>
     </div>

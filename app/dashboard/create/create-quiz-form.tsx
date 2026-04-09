@@ -181,7 +181,7 @@ export function CreateQuizForm({ initialThemeChips, initialLevelChips }: Props) 
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -198,7 +198,7 @@ export function CreateQuizForm({ initialThemeChips, initialLevelChips }: Props) 
         </div>
       </div>
 
-      <main className="max-w-2xl mx-auto px-6 lg:px-8 py-12">
+      <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="mb-8">
           <p className="flex items-center gap-2 text-sm font-bold text-violet-600 dark:text-violet-400">
             <Sparkles className="h-4 w-4" />
@@ -217,7 +217,7 @@ export function CreateQuizForm({ initialThemeChips, initialLevelChips }: Props) 
               {submitError}
             </div>
           )}
-          <div className="bg-card border border-border rounded-xl p-8">
+          <div className="bg-card border border-border rounded-xl p-5 sm:p-8">
             <div className="mb-6">
               <label className="block text-sm font-medium mb-2">
                 Titre du quiz *
@@ -506,7 +506,7 @@ export function CreateQuizForm({ initialThemeChips, initialLevelChips }: Props) 
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Thème
@@ -559,7 +559,7 @@ export function CreateQuizForm({ initialThemeChips, initialLevelChips }: Props) 
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link href="/dashboard" className="flex-1">
               <Button variant="outline" size="lg" className="w-full border-border hover:bg-muted">
                 Annuler

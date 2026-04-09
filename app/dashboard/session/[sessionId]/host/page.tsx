@@ -6,9 +6,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   hostControlSession,
-  getSessionLeaderboard,
   getHostQuestionLiveOverview,
   setSessionAutoAdvance,
+  getBossFightSnapshot,
   type HostControlAction,
   type HostQuestionLiveRow,
 } from '@/app/actions/quiz'
@@ -25,27 +25,23 @@ import {
   ArrowLeft,
   Loader2,
   Play,
-  Trophy,
   SkipForward,
   Users,
   Square,
   HelpCircle,
-  Sparkles,
   Timer,
   Minus,
   ClipboardList,
   FastForward,
 } from 'lucide-react'
 
-/** Après la fin du chrono → afficher le classement ; puis durée affichage avant question suivante. */
-const AUTO_SHOW_LEADERBOARD_MS = 2200
-const AUTO_NEXT_QUESTION_MS = 6500
+const AUTO_NEXT_QUESTION_MS = 3500
 
 const STATUS_FR: Record<string, string> = {
   waiting: 'Salle d’attente',
   active: 'Partie active',
   question: 'Question en cours',
-  results: 'Affichage du classement',
+  results: 'Transition',
   finished: 'Partie terminée',
 }
 
@@ -61,10 +57,8 @@ export default function HostSessionPage() {
   const [questions, setQuestions] = useState<
     { id: string; question_text: string; question_type?: string; correct_answer?: string; options?: string[] }[]
   >([])
-  const [leaderboard, setLeaderboard] = useState<
-    { rank: number; nickname: string; score: number; level: number }[]
-  >([])
   const [participantCount, setParticipantCount] = useState(0)
+  const [bossHp, setBossHp] = useState<{ hp: number; maxHp: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,9 +70,6 @@ export default function HostSessionPage() {
     HostQuestionLiveRow[] | null
   >(null)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
-  const autoShowLeaderboardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
 
   const sessionRef = useRef<Record<string, unknown> | null>(null)
   const questionsRef = useRef<
@@ -109,13 +100,22 @@ export default function HostSessionPage() {
     window.setTimeout(() => setSuccessHint(null), 3000)
   }, [])
 
-  const loadLeaderboard = useCallback(async () => {
-    try {
-      const { top5, all } = await getSessionLeaderboard(sessionId)
-      setLeaderboard(top5)
-      setParticipantCount(all.length)
-    } catch {
-      /* ignore */
+  const refreshParticipantCount = useCallback(async () => {
+    const { count } = await supabase
+      .from('participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+    setParticipantCount(count ?? 0)
+  }, [sessionId, supabase])
+
+  const refreshBossHp = useCallback(async () => {
+    if (String(sessionRef.current?.game_mode ?? '') !== 'hackathon') {
+      setBossHp(null)
+      return
+    }
+    const res = await getBossFightSnapshot(sessionId)
+    if (res.ok) {
+      setBossHp({ hp: res.hp, maxHp: res.maxHp })
     }
   }, [sessionId])
 
@@ -128,13 +128,14 @@ export default function HostSessionPage() {
           setError(result.error)
           return
         }
-        await loadLeaderboard()
+        await refreshParticipantCount()
+        await refreshBossHp()
       } catch (e) {
         console.error(e)
         setError('Une étape automatique a échoué — repassez en manuel ou rafraîchissez.')
       }
     },
-    [sessionId, loadLeaderboard],
+    [sessionId, refreshBossHp, refreshParticipantCount],
   )
 
   useEffect(() => {
@@ -152,23 +153,13 @@ export default function HostSessionPage() {
       if (!Boolean(sessionRef.current?.auto_advance)) return
       if (String(sessionRef.current?.status) !== 'question') return
       if (Date.now() < deadlineMs) return
-      if (autoShowLeaderboardTimerRef.current != null) return
-
-      autoShowLeaderboardTimerRef.current = setTimeout(() => {
-        autoShowLeaderboardTimerRef.current = null
-        if (String(sessionRef.current?.status) !== 'question') return
-        void runSilent('show_leaderboard')
-      }, AUTO_SHOW_LEADERBOARD_MS)
+      void runSilent('next_question')
     }
 
     const id = window.setInterval(tick, 400)
     tick()
     return () => {
       window.clearInterval(id)
-      if (autoShowLeaderboardTimerRef.current != null) {
-        window.clearTimeout(autoShowLeaderboardTimerRef.current)
-        autoShowLeaderboardTimerRef.current = null
-      }
     }
   }, [
     session?.auto_advance,
@@ -215,16 +206,7 @@ export default function HostSessionPage() {
 
   useEffect(() => {
     let cancelled = false
-    let leaderboardDebounce: ReturnType<typeof setTimeout> | null = null
     let overviewDebounce: ReturnType<typeof setTimeout> | null = null
-
-    const scheduleLeaderboard = () => {
-      if (leaderboardDebounce) clearTimeout(leaderboardDebounce)
-      leaderboardDebounce = setTimeout(() => {
-        leaderboardDebounce = null
-        void loadLeaderboard()
-      }, 400)
-    }
 
     const scheduleQuestionOverview = () => {
       if (overviewDebounce) clearTimeout(overviewDebounce)
@@ -272,7 +254,8 @@ export default function HostSessionPage() {
             options: Array.isArray(q.options) ? q.options : undefined,
           })),
         )
-        await loadLeaderboard()
+        await refreshParticipantCount()
+        await refreshBossHp()
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -299,7 +282,8 @@ export default function HostSessionPage() {
             }
             return prev
           })
-          scheduleLeaderboard()
+          void refreshParticipantCount()
+          void refreshBossHp()
         },
       )
       .on(
@@ -311,7 +295,7 @@ export default function HostSessionPage() {
           filter: `session_id=eq.${sessionId}`,
         },
         () => {
-          if (!cancelled) scheduleLeaderboard()
+          if (!cancelled) void refreshParticipantCount()
         },
       )
       .on(
@@ -323,7 +307,10 @@ export default function HostSessionPage() {
           filter: `session_id=eq.${sessionId}`,
         },
         () => {
-          if (!cancelled) scheduleQuestionOverview()
+          if (!cancelled) {
+            scheduleQuestionOverview()
+            void refreshBossHp()
+          }
         },
       )
       .subscribe((status, err) => {
@@ -351,24 +338,17 @@ export default function HostSessionPage() {
       setSession((prev) => (sessionLiveFieldsChanged(prev, next) ? next : prev))
       // Secours si Realtime « participants » n’est pas publié : liste à jour toutes les 4 s en salle d’attente.
       if (String(next.status ?? '') === 'waiting') {
-        void loadLeaderboard()
+        void refreshParticipantCount()
       }
     }, 4000)
 
     return () => {
       cancelled = true
-      if (leaderboardDebounce) clearTimeout(leaderboardDebounce)
       if (overviewDebounce) clearTimeout(overviewDebounce)
       window.clearInterval(pollId)
       void supabase.removeChannel(sessionCh)
     }
-  }, [sessionId, loadLeaderboard, refreshQuestionOverview])
-
-  useEffect(() => {
-    if (session?.status === 'results') {
-      void loadLeaderboard()
-    }
-  }, [session?.status, loadLeaderboard])
+  }, [sessionId, refreshParticipantCount, refreshQuestionOverview, refreshBossHp])
 
   const onAutoAdvanceChange = async (checked: boolean) => {
     setAutoAdvancePending(true)
@@ -384,7 +364,7 @@ export default function HostSessionPage() {
       )
       showHint(
         checked
-          ? 'Défilement auto : classement puis question suivante.'
+          ? 'Défilement auto activé.'
           : 'Défilement automatique désactivé.',
       )
     } finally {
@@ -402,10 +382,10 @@ export default function HostSessionPage() {
         setError(result.error)
         return
       }
-      await loadLeaderboard()
+      await refreshParticipantCount()
+      await refreshBossHp()
       const hints: Partial<Record<HostControlAction, string>> = {
         start: 'La partie est lancée — les élèves voient la 1ʳᵉ question.',
-        show_leaderboard: 'Classement affiché chez les joueurs.',
         next_question: 'Étape suivante envoyée.',
         end: 'Session terminée.',
         timer_cut: 'Temps de question terminé pour tous les élèves.',
@@ -537,10 +517,9 @@ export default function HostSessionPage() {
               </div>
               <div>
                 <p className="font-semibold text-foreground">Défilement automatique</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Après la fin du chrono : affichage du TOP 5 (~{(AUTO_SHOW_LEADERBOARD_MS / 1000).toFixed(1)}s), puis
-                  question suivante (~{(AUTO_NEXT_QUESTION_MS / 1000).toFixed(1)}s). Le pupitre doit rester ouvert.
-                </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Après la fin du chrono : passage automatique à la question suivante (~{(AUTO_NEXT_QUESTION_MS / 1000).toFixed(1)}s).
+              </p>
               </div>
             </div>
             <div className="flex items-center gap-3 sm:shrink-0">
@@ -582,6 +561,21 @@ export default function HostSessionPage() {
                     : String(currentQ.correct_answer)}
               </p>
             )}
+          </section>
+        )}
+
+        {String(session.game_mode ?? '') === 'hackathon' && bossHp && (
+          <section className="rounded-2xl border border-destructive/25 bg-destructive/5 p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-destructive">Boss HP</p>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-destructive transition-all duration-500"
+                style={{ width: `${Math.max(0, Math.min(100, (bossHp.hp / bossHp.maxHp) * 100))}%` }}
+              />
+            </div>
+            <p className="mt-2 text-sm font-semibold text-foreground">
+              {bossHp.hp} / {bossHp.maxHp} HP
+            </p>
           </section>
         )}
 
@@ -670,15 +664,6 @@ export default function HostSessionPage() {
         {status === 'active' && (
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
-              variant="secondary"
-              className="h-12 flex-1 gap-2 font-semibold"
-              disabled={busy}
-              onClick={() => void run('show_leaderboard')}
-            >
-              <Trophy className="h-4 w-4" />
-              Classement intermédiaire
-            </Button>
-            <Button
               variant="outline"
               className="h-12 flex-1 gap-2"
               disabled={busy}
@@ -693,10 +678,10 @@ export default function HostSessionPage() {
         {status === 'question' && (
           <div className="space-y-3">
             <p className="text-center text-xs text-muted-foreground">
-              Chrono synchronisé avec les élèves : vous pouvez le raccourcir ou le couper avant le classement.
+              Chrono synchronisé avec les élèves : vous pouvez le raccourcir ou le couper.
               {Boolean(session.auto_advance) && (
                 <span className="mt-1 block font-medium text-violet-700 dark:text-violet-300">
-                  Défilement auto : le classement s’affichera sans clic après la fin du temps.
+                  Défilement auto actif.
                 </span>
               )}
             </p>
@@ -722,15 +707,6 @@ export default function HostSessionPage() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
-                variant="secondary"
-                className="h-12 flex-1 gap-2 font-semibold"
-                disabled={busy}
-                onClick={() => void run('show_leaderboard')}
-              >
-                <Trophy className="h-4 w-4" />
-                Montrer le TOP 5
-              </Button>
-              <Button
                 variant="outline"
                 className="h-12 flex-1 gap-2"
                 disabled={busy}
@@ -747,8 +723,8 @@ export default function HostSessionPage() {
           <div className="space-y-2">
             <p className="text-center text-xs text-muted-foreground">
               {Boolean(session.auto_advance)
-                ? 'Défilement auto : passage à la question suivante dans quelques secondes (ou utilisez le bouton).'
-                : 'Les joueurs voient le classement. Passez à la suite quand vous voulez.'}
+                ? 'Défilement auto : passage à la question suivante.'
+                : 'Passez à la suite quand vous voulez.'}
             </p>
             <Button
               className="h-12 w-full gap-2 font-semibold"
@@ -765,48 +741,6 @@ export default function HostSessionPage() {
           </div>
         )}
 
-        {(status === 'finished' || status === 'results') && (
-          <section className="rounded-2xl border border-border bg-gradient-to-b from-card to-muted/20 p-5 shadow-inner">
-            <div className="mb-4 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
-              <h2 className="font-bold">Podium (TOP 5)</h2>
-            </div>
-            <ol className="space-y-2">
-              {leaderboard.length === 0 ? (
-                <li className="text-sm text-muted-foreground">Aucun joueur pour l’instant</li>
-              ) : (
-                leaderboard.map((row) => {
-                  const medal =
-                    row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : null
-                  const rowStyle =
-                    row.rank === 1
-                      ? 'border-amber-400/50 bg-amber-500/10'
-                      : row.rank === 2
-                        ? 'border-slate-400/40 bg-slate-400/10'
-                        : row.rank === 3
-                          ? 'border-orange-400/40 bg-orange-500/10'
-                          : 'border-border bg-background'
-                  return (
-                    <li
-                      key={row.rank + row.nickname}
-                      className={`flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm ${rowStyle}`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="flex w-8 justify-center font-mono text-base">
-                          {medal ?? `#${row.rank}`}
-                        </span>
-                        <span className="font-medium">{row.nickname}</span>
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums">
-                        {row.score} pts · Nv.{row.level}
-                      </span>
-                    </li>
-                  )
-                })
-              )}
-            </ol>
-          </section>
-        )}
 
         {status === 'finished' && (
           <Button variant="outline" className="w-full h-12" asChild>

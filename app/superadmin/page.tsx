@@ -7,7 +7,7 @@ export default async function SuperadminPage() {
   const data = await loadSuperadminDashboard()
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-violet-500/[0.04] via-background to-background p-6 md:p-10">
+    <div className="min-h-screen bg-gradient-to-b from-violet-500/[0.04] via-background to-background p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-[1600px] space-y-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>

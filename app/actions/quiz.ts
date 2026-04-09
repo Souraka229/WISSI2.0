@@ -918,6 +918,9 @@ export async function submitAnswer(
   answer: string,
   isCorrect: boolean,
   timeTaken: number,
+  options?: {
+    doubleOrNothing?: boolean
+  },
 ) {
   const supabase = await createClient()
 
@@ -961,12 +964,27 @@ export async function submitAnswer(
 
   const { data: participant } = await supabase
     .from('participants')
-    .select('score')
+    .select('score, streak, max_streak')
     .eq('id', participantId)
     .single()
 
-  const prev = participant?.score ?? 0
-  const newScore = prev + pointsEarned
+  const prevScore = participant?.score ?? 0
+  const prevStreak = participant?.streak ?? 0
+  const prevMaxStreak = participant?.max_streak ?? 0
+
+  const nextStreak = isCorrect ? prevStreak + 1 : 0
+  const comboMultiplier = nextStreak >= 5 ? 2 : nextStreak >= 3 ? 1.5 : 1
+  const comboPoints = isCorrect ? Math.round(pointsEarned * comboMultiplier) : 0
+
+  let newScore = prevScore + comboPoints
+  if (options?.doubleOrNothing) {
+    if (isCorrect) {
+      newScore = prevScore + comboPoints * 2
+    } else {
+      newScore = Math.floor(prevScore / 2)
+    }
+  }
+  const newMaxStreak = Math.max(prevMaxStreak, nextStreak)
   const newLevel = Math.min(99, 1 + Math.floor(newScore / SCORE_PER_LEVEL))
 
   await supabase
@@ -974,11 +992,21 @@ export async function submitAnswer(
     .update({
       score: newScore,
       level: newLevel,
+      streak: nextStreak,
+      max_streak: newMaxStreak,
     })
     .eq('id', participantId)
 
   revalidateTag(`session-${sessionId}`)
-  return { duplicate: false as const, pointsEarned, newScore, newLevel }
+  return {
+    duplicate: false as const,
+    pointsEarned: comboPoints,
+    newScore,
+    newLevel,
+    streak: nextStreak,
+    comboMultiplier,
+    doubleOrNothing: Boolean(options?.doubleOrNothing),
+  }
 }
 
 export async function addReaction(
@@ -998,6 +1026,134 @@ export async function addReaction(
 
   revalidateTag(`session-${sessionId}`)
   return data
+}
+
+export type LivePowerType = 'freeze' | 'bomb' | 'shield' | 'swap'
+
+export async function useLivePower(input: {
+  sessionId: string
+  participantId: string
+  type: LivePowerType
+  targetParticipantId?: string | null
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient()
+  const { sessionId, participantId, type, targetParticipantId } = input
+
+  const { data: me, error: meErr } = await supabase
+    .from('participants')
+    .select('id, session_id, score')
+    .eq('id', participantId)
+    .single()
+  if (meErr || !me || me.session_id !== sessionId) {
+    return { ok: false, error: 'Participant invalide.' }
+  }
+
+  if (type === 'bomb') {
+    const { data: others, error } = await supabase
+      .from('participants')
+      .select('id, score')
+      .eq('session_id', sessionId)
+      .neq('id', participantId)
+    if (error) return { ok: false, error: 'Impossible d’appliquer Bomb.' }
+    await Promise.all(
+      (others ?? []).map((p) =>
+        supabase
+          .from('participants')
+          .update({ score: Math.max(0, (p.score ?? 0) - 200) })
+          .eq('id', p.id),
+      ),
+    )
+    revalidateTag(`session-${sessionId}`)
+    return { ok: true }
+  }
+
+  if (type === 'swap') {
+    const { data: all, error } = await supabase
+      .from('participants')
+      .select('id, score')
+      .eq('session_id', sessionId)
+      .order('score', { ascending: false })
+    if (error || !all) return { ok: false, error: 'Impossible d’appliquer Swap.' }
+    const meIdx = all.findIndex((p) => p.id === participantId)
+    if (meIdx <= 0) return { ok: true }
+    const ahead = all[meIdx - 1]
+    const myScore = all[meIdx].score ?? 0
+    const aheadScore = ahead.score ?? 0
+    await Promise.all([
+      supabase.from('participants').update({ score: aheadScore }).eq('id', participantId),
+      supabase.from('participants').update({ score: myScore }).eq('id', ahead.id),
+    ])
+    revalidateTag(`session-${sessionId}`)
+    return { ok: true }
+  }
+
+  if (type === 'freeze' || type === 'shield') {
+    if (type === 'freeze' && !targetParticipantId) {
+      return { ok: false, error: 'Cible requise pour Freeze.' }
+    }
+    return { ok: true }
+  }
+
+  return { ok: false, error: 'Pouvoir inconnu.' }
+}
+
+export async function getBossFightSnapshot(sessionId: string): Promise<
+  | { ok: false; error: string }
+  | {
+      ok: true
+      hp: number
+      maxHp: number
+      totalCorrect: number
+      connected: number
+      currentQuestionCorrect: number
+    }
+> {
+  const supabase = await createClient()
+  const { data: session, error: sErr } = await supabase
+    .from('sessions')
+    .select('id, quiz_id, secondary_quiz_id, game_mode, current_question_index')
+    .eq('id', sessionId)
+    .single()
+  if (sErr || !session) return { ok: false, error: 'Session introuvable.' }
+
+  const maxHp = 100
+  const damagePerCorrect = 5
+
+  const [{ count: connected }, { count: totalCorrect }, merged] = await Promise.all([
+    supabase
+      .from('participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId),
+    supabase
+      .from('answers')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .eq('is_correct', true),
+    fetchMergedSessionQuestions(supabase, session as SessionRow),
+  ])
+
+  const currentIdx = Number(session.current_question_index ?? 0)
+  const currentQId = merged[currentIdx]?.id
+  let currentQuestionCorrect = 0
+  if (currentQId) {
+    const { count } = await supabase
+      .from('answers')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .eq('question_id', currentQId)
+      .eq('is_correct', true)
+    currentQuestionCorrect = count ?? 0
+  }
+
+  const hp = Math.max(0, maxHp - (totalCorrect ?? 0) * damagePerCorrect)
+  return {
+    ok: true,
+    hp,
+    maxHp,
+    totalCorrect: totalCorrect ?? 0,
+    connected: connected ?? 0,
+    currentQuestionCorrect,
+  }
 }
 
 export async function getSessionResults(sessionId: string) {

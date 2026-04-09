@@ -44,7 +44,7 @@ export default async function SessionsHistoryPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild>
               <Link href="/dashboard" aria-label="Retour">
@@ -56,14 +56,14 @@ export default async function SessionsHistoryPage() {
               <span className="text-lg font-bold tracking-tight">Mes sessions</span>
             </div>
           </div>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" className="hidden sm:inline-flex" asChild>
             <Link href="/dashboard">Tableau de bord</Link>
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
-        <h1 className="text-3xl font-black tracking-tight">Historique des sessions</h1>
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Historique des sessions</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Sessions que vous avez animées : retrouvez le PIN, le statut et ouvrez les résultats ou le
           pupitre.
@@ -83,7 +83,7 @@ export default async function SessionsHistoryPage() {
 
         {!loadError && sessions.length > 0 && (
           <div className="mt-8 overflow-x-auto rounded-xl border border-border">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Date</th>

@@ -48,7 +48,7 @@ export function DashboardCockpitView({
   return (
     <>
       <section className="border-b border-border bg-card/40">
-        <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -78,8 +78,8 @@ export function DashboardCockpitView({
         </div>
       </section>
 
-      <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-4">
           {statCards.map((card) => (
             <div
               key={card.label}
@@ -93,7 +93,7 @@ export function DashboardCockpitView({
               >
                 <card.icon className="h-6 w-6" aria-hidden />
               </div>
-              <p className="text-3xl font-black tabular-nums tracking-tight">{card.value}</p>
+              <p className="text-2xl font-black tabular-nums tracking-tight sm:text-3xl">{card.value}</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {card.label}
               </p>

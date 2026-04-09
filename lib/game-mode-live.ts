@@ -1,6 +1,7 @@
 /** Libellés et styles des modes live (stickers pupitre / élève / lancement). */
 
 export type LiveGameModeKey = 'challenge_free' | 'prof_dual' | 'hackathon'
+export type LiveSessionPreset = 'classic' | 'battle_royale' | 'boss_fight' | 'blitz'
 
 export function normalizeLiveGameMode(raw: string | null | undefined): LiveGameModeKey {
   if (raw === 'prof_dual' || raw === 'hackathon' || raw === 'challenge_free') {
@@ -11,9 +12,26 @@ export function normalizeLiveGameMode(raw: string | null | undefined): LiveGameM
 
 export function liveModeLabel(mode: string | null | undefined): string {
   const m = normalizeLiveGameMode(mode)
-  if (m === 'hackathon') return 'Hackathon live'
-  if (m === 'prof_dual') return 'Double défi'
-  return 'Challenge libre'
+  if (m === 'hackathon') return 'Boss Fight'
+  if (m === 'prof_dual') return 'Battle Royale'
+  return 'Classic / Blitz'
+}
+
+/**
+ * Les 4 presets produit sont mappés sur les valeurs déjà supportées en base.
+ * Aucun changement de schéma requis.
+ */
+export function presetToDbMode(preset: LiveSessionPreset): LiveGameModeKey {
+  if (preset === 'battle_royale') return 'prof_dual'
+  if (preset === 'boss_fight') return 'hackathon'
+  return 'challenge_free'
+}
+
+export function isBlitzPreset(
+  preset: LiveSessionPreset,
+  scoringMode: string | null | undefined,
+): boolean {
+  return preset === 'blitz' || String(scoringMode ?? '') === 'speed'
 }
 
 export const LIVE_MODE_STICKERS: Record<

@@ -80,7 +80,7 @@ export default async function ProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-500/[0.06] via-background to-muted/25">
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild>
               <Link href="/dashboard" aria-label="Retour au tableau de bord">
@@ -116,8 +116,8 @@ export default async function ProfilePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
-        <section className="relative overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08] p-8 shadow-lg ring-1 ring-violet-500/10">
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+        <section className="relative overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08] p-5 sm:p-8 shadow-lg ring-1 ring-violet-500/10">
           <div
             className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-fuchsia-500/15 blur-3xl"
             aria-hidden

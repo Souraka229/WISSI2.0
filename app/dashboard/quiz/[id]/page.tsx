@@ -476,7 +476,7 @@ export default function QuizEditorPage() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
         <QuizViralSharePanel
           quizId={quizId}
           quizTitle={quiz.title ?? 'Quiz'}
@@ -539,7 +539,7 @@ export default function QuizEditorPage() {
               />
             </div>
             <div className="flex flex-wrap items-end gap-4">
-              <div className="min-w-[12rem]">
+              <div className="w-full sm:w-auto sm:min-w-[12rem]">
                 <label className="mb-2 block text-sm font-medium text-foreground" htmlFor="super-question-count">
                   Nombre de questions
                 </label>
@@ -560,7 +560,7 @@ export default function QuizEditorPage() {
                     )
                   }}
                   disabled={superBusy || importBusy}
-                  className="max-w-[10rem]"
+                  className="w-full sm:max-w-[10rem]"
                 />
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   Valeur libre (minimum 1). Les modèles IA peuvent parfois renvoyer un peu moins de questions
@@ -799,7 +799,7 @@ export default function QuizEditorPage() {
 
         {/* Add Question Form */}
         {showAddQuestion && (
-          <div className="bg-card border border-border rounded-xl p-8 mb-8">
+          <div className="bg-card border border-border rounded-xl p-5 sm:p-8 mb-8">
             <h3 className="mb-6 text-lg font-bold text-foreground">
               {editingQuestionId ? 'Modifier la question' : 'Nouvelle question'}
             </h3>
@@ -825,7 +825,7 @@ export default function QuizEditorPage() {
               </div>
 
               {/* Question Type */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground">
                     Type de question
@@ -908,7 +908,7 @@ export default function QuizEditorPage() {
               )}
 
               {/* Settings */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-foreground">
                     Temps limite (secondes)
@@ -951,7 +951,7 @@ export default function QuizEditorPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
                 <Button
                   type="button"
                   variant="outline"

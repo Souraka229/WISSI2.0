@@ -122,6 +122,19 @@
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+  }
+  html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
   }
 }
 

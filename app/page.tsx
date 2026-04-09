@@ -57,7 +57,7 @@ export default function LandingPage() {
 
       {/* Navigation */}
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link
               href="/"
@@ -96,7 +96,7 @@ export default function LandingPage() {
               </a>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <ThemeSwitcher />
               {authLoading ? (
                 <div className="h-8 w-20 animate-pulse rounded-md bg-muted" aria-hidden />
@@ -115,7 +115,7 @@ export default function LandingPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-muted-foreground hover:text-foreground"
+                      className="hidden text-muted-foreground hover:text-foreground sm:inline-flex"
                     >
                       Connexion
                     </Button>
@@ -136,21 +136,21 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="px-6 pb-20 pt-28 lg:px-8 lg:pt-32">
+      <section className="px-4 pb-20 pt-24 sm:px-6 lg:px-8 lg:pt-32">
         <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12">
           <div className="max-w-3xl">
             <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-violet-800 dark:text-violet-200">
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Plateforme quiz live · SCITI / WISSI
             </p>
-            <h1 className="mb-8 text-balance text-5xl font-black tracking-tight text-foreground md:text-6xl lg:text-7xl lg:leading-[1.05]">
+            <h1 className="mb-8 text-balance text-4xl font-black tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl lg:leading-[1.05]">
               Créez. Lancez.{' '}
               <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-violet-400 dark:to-fuchsia-400">
                 Analysez.
               </span>
             </h1>
 
-            <p className="mb-10 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-xl">
+            <p className="mb-10 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg md:text-xl">
               QCM en direct, PIN & QR code, classement live et exports — pensé pour les enseignants qui veulent
               captiver la salle, pas perdre du temps dans les outils.
             </p>
@@ -228,7 +228,7 @@ export default function LandingPage() {
 
       {/* Stats Section */}
       <section className="border-y border-border/80 bg-muted/20 py-16 dark:bg-muted/10">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4 md:gap-0 md:divide-x md:divide-border/60">
             <StatBlock value="+85%" label="d'engagement en classe" />
             <StatBlock value="Live" label="sessions multijoueur" />
@@ -239,10 +239,7 @@ export default function LandingPage() {
       </section>
 
       {/* Comment ça marche */}
-      <section
-        id="comment-ca-marche"
-        className="scroll-mt-24 px-6 py-24 lg:px-8"
-      >
+      <section id="comment-ca-marche" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto mb-14 max-w-2xl text-center">
             <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
@@ -276,7 +273,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="fonctionnalites" className="scroll-mt-24 px-6 py-24 lg:px-8">
+      <section id="fonctionnalites" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-16 max-w-2xl">
             <p
@@ -328,7 +325,7 @@ export default function LandingPage() {
       </section>
 
       {/* Demo Preview Section */}
-      <section className="py-24 px-6 lg:px-8 bg-card border-y border-border">
+      <section className="border-y border-border bg-card px-4 py-24 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
@@ -401,7 +398,7 @@ export default function LandingPage() {
       {/* À propos */}
       <section
         id="apropos"
-        className="scroll-mt-24 border-y border-border/80 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-6 py-20 lg:px-8"
+        className="scroll-mt-24 border-y border-border/80 bg-gradient-to-br from-violet-500/[0.06] to-transparent px-4 py-20 sm:px-6 lg:px-8"
       >
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="mb-4 text-2xl font-black tracking-tight text-foreground md:text-3xl">
@@ -416,7 +413,7 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials Section */}
-      <section id="temoignages" className="scroll-mt-24 px-6 py-24 lg:px-8">
+      <section id="temoignages" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-16 text-center">
             <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
@@ -451,7 +448,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="tarifs" className="scroll-mt-24 border-y border-border bg-card px-6 py-24 lg:px-8">
+      <section id="tarifs" className="scroll-mt-24 border-y border-border bg-card px-4 py-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-16 text-center">
             <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
@@ -518,7 +515,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="px-6 py-24 lg:px-8">
+      <section className="px-4 py-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="mb-6 text-4xl font-black tracking-tight text-foreground md:text-5xl">
             Prêt à animer votre prochain cours ?

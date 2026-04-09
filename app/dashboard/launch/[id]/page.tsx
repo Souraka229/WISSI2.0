@@ -9,6 +9,10 @@ import {
   type GameMode,
   type SessionScoringMode,
 } from '@/app/actions/quiz'
+import {
+  presetToDbMode,
+  type LiveSessionPreset,
+} from '@/lib/game-mode-live'
 import { Button } from '@/components/ui/button'
 import { JoinQrCode } from '@/components/join-qr-code'
 import { Copy, Play, ArrowLeft, Loader2, Sparkles, Zap, Flame } from 'lucide-react'
@@ -24,7 +28,7 @@ export default function LaunchPage() {
   const [copied, setCopied] = useState(false)
   const [copiedJoinUrl, setCopiedJoinUrl] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
-  const [gameMode, setGameMode] = useState<GameMode>('challenge_free')
+  const [sessionPreset, setSessionPreset] = useState<LiveSessionPreset>('classic')
   const [secondaryQuizId, setSecondaryQuizId] = useState<string>('')
   const [otherQuizzes, setOtherQuizzes] = useState<{ id: string; title: string }[]>([])
   const [scoringMode, setScoringMode] = useState<SessionScoringMode>('classic')
@@ -56,13 +60,16 @@ export default function LaunchPage() {
     setLaunchError(null)
     try {
       const secondary =
-        gameMode === 'prof_dual' || gameMode === 'hackathon'
+        sessionPreset === 'battle_royale' || sessionPreset === 'boss_fight'
           ? secondaryQuizId.trim() || null
           : null
+      const gameMode: GameMode = presetToDbMode(sessionPreset)
+      const finalScoringMode: SessionScoringMode =
+        sessionPreset === 'blitz' ? 'speed' : scoringMode
       const newSession = await startSession(quizId, {
         gameMode,
         secondaryQuizId: secondary,
-        scoringMode,
+        scoringMode: finalScoringMode,
       })
       if (!newSession?.id) {
         throw new Error('Réponse serveur invalide')
@@ -218,28 +225,28 @@ export default function LaunchPage() {
               </div>
 
               <div className="mb-8 space-y-4 rounded-xl border border-border bg-muted/30 p-6 text-left">
-                <p className="text-sm font-semibold text-foreground">Type de partie</p>
+                <p className="text-sm font-semibold text-foreground">Mode de jeu live</p>
                 <p className="text-xs text-muted-foreground">
-                  Chaque mode a son sticker live sur le pupitre et chez les joueurs.
+                  Les modes SCITI Live s’appuient sur la logique existante sans changer le design.
                 </p>
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent p-3 transition-colors hover:bg-background/80 has-[:checked]:border-emerald-500/35 has-[:checked]:bg-emerald-500/5">
                   <input
                     type="radio"
                     name="gameMode"
-                    checked={gameMode === 'challenge_free'}
-                    onChange={() => setGameMode('challenge_free')}
+                    checked={sessionPreset === 'classic'}
+                    onChange={() => setSessionPreset('classic')}
                     className="mt-1"
                   />
                   <span className="flex-1">
                     <span className="flex flex-wrap items-center gap-2 font-medium">
-                      Challenge libre
+                      Classic
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
                         <Sparkles className="h-3 w-3" />
                         Live classe
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Un quiz, session ouverte : les joueurs rejoignent avec le PIN.
+                      Questions séquentielles, timer standard et classement final.
                     </span>
                   </span>
                 </label>
@@ -247,21 +254,20 @@ export default function LaunchPage() {
                   <input
                     type="radio"
                     name="gameMode"
-                    checked={gameMode === 'prof_dual'}
-                    onChange={() => setGameMode('prof_dual')}
+                    checked={sessionPreset === 'battle_royale'}
+                    onChange={() => setSessionPreset('battle_royale')}
                     className="mt-1"
                   />
                   <span className="flex-1">
                     <span className="flex flex-wrap items-center gap-2 font-medium">
-                      Double défi
+                      Battle Royale
                       <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100">
                         <Zap className="h-3 w-3" />
                         Live défi
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Sticker et ambiance « double défi ». Tu peux enchaîner un second quiz en bas, ou lancer avec
-                      ce quiz seul.
+                      Une erreur élimine le joueur : passage en spectateur avec réactions.
                     </span>
                   </span>
                 </label>
@@ -269,24 +275,44 @@ export default function LaunchPage() {
                   <input
                     type="radio"
                     name="gameMode"
-                    checked={gameMode === 'hackathon'}
-                    onChange={() => setGameMode('hackathon')}
+                    checked={sessionPreset === 'boss_fight'}
+                    onChange={() => setSessionPreset('boss_fight')}
                     className="mt-1"
                   />
                   <span className="flex-1">
                     <span className="flex flex-wrap items-center gap-2 font-medium">
-                      Hackathon live
+                      Boss Fight
                       <span className="dashboard-live-sticker dashboard-live-sticker--hot inline-flex items-center gap-1 rounded-full border border-fuchsia-500/45 bg-gradient-to-r from-fuchsia-500/15 to-orange-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-950 dark:text-fuchsia-100">
                         <Flame className="h-3 w-3 text-orange-600 dark:text-orange-400" />
                         Intense
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Ambiance intense + sticker hackathon. Second quiz facultatif pour enchaîner plus longtemps.
+                      Le professeur a des HP, la classe inflige des dégâts collectifs à chaque question.
                     </span>
                   </span>
                 </label>
-                {(gameMode === 'prof_dual' || gameMode === 'hackathon') && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent p-3 transition-colors hover:bg-background/80 has-[:checked]:border-violet-500/45 has-[:checked]:bg-violet-500/5">
+                  <input
+                    type="radio"
+                    name="gameMode"
+                    checked={sessionPreset === 'blitz'}
+                    onChange={() => setSessionPreset('blitz')}
+                    className="mt-1"
+                  />
+                  <span className="flex-1">
+                    <span className="flex flex-wrap items-center gap-2 font-medium">
+                      Blitz
+                      <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-900 dark:text-violet-100">
+                        30s max
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Chrono accéléré en style vitesse (optimisé rythme rapide).
+                    </span>
+                  </span>
+                </label>
+                {(sessionPreset === 'battle_royale' || sessionPreset === 'boss_fight') && (
                   <div>
                     <label className="mb-2 block text-xs font-medium text-muted-foreground">
                       Deuxième quiz <span className="font-normal text-muted-foreground/80">(facultatif)</span>
@@ -304,8 +330,7 @@ export default function LaunchPage() {
                       ))}
                     </select>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Sans choix, la session utilise uniquement le quiz que tu lances ; le mode change surtout
-                      l’étiquette live et l’ambiance affichée.
+                      Sans choix, la session utilise uniquement le quiz principal.
                     </p>
                   </div>
                 )}
@@ -351,7 +376,7 @@ export default function LaunchPage() {
                   size={200}
                   className="md:shrink-0"
                 />
-                <div className="bg-card border-2 border-primary/40 rounded-xl p-8 text-center md:min-w-[280px]">
+                <div className="bg-card border-2 border-primary/40 rounded-xl p-6 text-center sm:p-8 md:min-w-[280px]">
                   <p className="text-sm text-muted-foreground mb-3 font-semibold uppercase tracking-wider">
                     Code PIN
                   </p>

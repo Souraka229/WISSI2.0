@@ -11,7 +11,13 @@ import {
 } from '@/lib/session-questions'
 import { effectiveLiveQuestionSeconds } from '@/lib/live-quiz'
 import { liveMcqTileClass } from '@/lib/live-mcq-colors'
-import { addReaction, submitAnswer, getSessionLeaderboard } from '@/app/actions/quiz'
+import {
+  addReaction,
+  submitAnswer,
+  useLivePower,
+  getBossFightSnapshot,
+  type LivePowerType,
+} from '@/app/actions/quiz'
 import { SessionLiveStickers } from '@/components/live/session-live-stickers'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,10 +27,10 @@ import {
   CheckCircle2,
   Clock,
   Flame,
-  Sparkles,
-  ArrowUp,
-  ArrowDown,
-  Minus,
+  Snowflake,
+  Bomb,
+  Shield,
+  Shuffle,
 } from 'lucide-react'
 
 type ParticipantRow = {
@@ -60,10 +66,11 @@ export default function StudentPlayerPage() {
   const [session, setSession] = useState<Record<string, unknown> | null>(null)
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [me, setMe] = useState<ParticipantRow | null>(null)
-  const [leaderboard, setLeaderboard] = useState<
-    { rank: number; nickname: string; score: number; level: number; id?: string }[]
-  >([])
-  const [myRank, setMyRank] = useState<number | null>(null)
+  const [others, setOthers] = useState<{ id: string; nickname: string }[]>([])
+  const [bossHp, setBossHp] = useState<{ hp: number; maxHp: number } | null>(null)
+  const [powers, setPowers] = useState<LivePowerType[]>([])
+  const [shieldActive, setShieldActive] = useState(false)
+  const [frozenUntil, setFrozenUntil] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [answered, setAnswered] = useState(false)
@@ -72,30 +79,27 @@ export default function StudentPlayerPage() {
   const [reactionLeft, setReactionLeft] = useState(3)
   const [onlineCount, setOnlineCount] = useState(1)
   const [answerFeedback, setAnswerFeedback] = useState<AnswerFeedback | null>(null)
+  const [doubleOrNothing, setDoubleOrNothing] = useState(false)
+  const [isEliminated, setIsEliminated] = useState(false)
   const [realtimeStatus, setRealtimeStatus] = useState<
     'connecting' | 'connected' | 'error'
   >('connecting')
   const questionKeyRef = useRef<string>('')
   const questionsRef = useRef<QuestionRow[]>([])
-  /** Rangs au début de la question courante (avant les points de cette question). */
-  const questionStartRanksRef = useRef<Map<string, number>>(new Map())
-  const resultsCompareBaselineRef = useRef<Map<string, number>>(new Map())
-  const resultsBaselineLockedRef = useRef(false)
 
   useEffect(() => {
     questionsRef.current = questions
   }, [questions])
 
-  const refreshLeaderboard = useCallback(async () => {
-    try {
-      const { top5, all } = await getSessionLeaderboard(sessionId)
-      setLeaderboard(top5)
-      const r = all.findIndex((p) => p.id === participantId)
-      setMyRank(r >= 0 ? r + 1 : null)
-    } catch {
-      /* ignore */
-    }
-  }, [sessionId, participantId])
+  const refreshOthers = useCallback(async () => {
+    const { data } = await supabase
+      .from('participants')
+      .select('id, nickname')
+      .eq('session_id', sessionId)
+      .neq('id', participantId)
+      .order('nickname', { ascending: true })
+    setOthers((data ?? []) as { id: string; nickname: string }[])
+  }, [participantId, sessionId, supabase])
 
   const refreshMe = useCallback(async () => {
     const { data } = await supabase
@@ -135,7 +139,7 @@ export default function StudentPlayerPage() {
 
         if (isWaiting) {
           setQuestions([])
-          await Promise.all([refreshMe(), refreshLeaderboard()])
+          await Promise.all([refreshMe(), refreshOthers()])
           return
         }
 
@@ -150,7 +154,7 @@ export default function StudentPlayerPage() {
         )
         if (cancelled) return
         setQuestions(merged as unknown as QuestionRow[])
-        await Promise.all([refreshMe(), refreshLeaderboard()])
+        await Promise.all([refreshMe(), refreshOthers()])
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -211,8 +215,26 @@ export default function StudentPlayerPage() {
           table: 'participants',
           filter: `id=eq.${participantId}`,
         },
-        () => {
-          void refreshMe()
+        () => void refreshMe(),
+      )
+      .on(
+        'broadcast',
+        { event: 'power_used' },
+        (payload) => {
+          const p = payload.payload as {
+            type?: LivePowerType
+            byParticipantId?: string
+            targetParticipantId?: string | null
+          }
+          if (p.byParticipantId === participantId) return
+          if (p.targetParticipantId && p.targetParticipantId !== participantId) return
+          if (p.type === 'freeze') {
+            if (shieldActive) {
+              setShieldActive(false)
+              return
+            }
+            setFrozenUntil(Date.now() + 5000)
+          }
         },
       )
       .on(
@@ -274,7 +296,24 @@ export default function StudentPlayerPage() {
       void supabase.removeChannel(liveCh)
       void supabase.removeChannel(presence)
     }
-  }, [sessionId, participantId, refreshMe, refreshLeaderboard])
+  }, [sessionId, participantId, refreshMe, refreshOthers, shieldActive])
+  useEffect(() => {
+    if (sessionGameMode !== 'hackathon') {
+      setBossHp(null)
+      return
+    }
+    let cancelled = false
+    const run = async () => {
+      const r = await getBossFightSnapshot(sessionId)
+      if (!cancelled && r.ok) setBossHp({ hp: r.hp, maxHp: r.maxHp })
+    }
+    void run()
+    const t = window.setInterval(() => void run(), 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(t)
+    }
+  }, [sessionGameMode, sessionId, qIndex])
 
   const status = session ? String(session.status) : ''
   const sessionGameMode = session ? String(session.game_mode ?? '') : ''
@@ -282,11 +321,34 @@ export default function StudentPlayerPage() {
   const currentQuestion = questions[qIndex]
 
   const reactionsEnabled = Boolean((session as any)?.reactions_enabled ?? true)
-  const REACTION_EMOJIS = ['🔥', '❤️', '😂', '👏', '😱', '🎉', '💪', '🤯'] as const
+  const REACTION_EMOJIS = ['🔥', '😱', '💀', '🤯', '⚡', '😂', '🎯', '💪'] as const
 
   useEffect(() => {
     setReactionLeft(3)
   }, [status, qIndex])
+
+  useEffect(() => {
+    if (status !== 'question' || sessionGameMode !== 'prof_dual') {
+      setIsEliminated(false)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase
+        .from('answers')
+        .select('is_correct, answer')
+        .eq('session_id', sessionId)
+        .eq('participant_id', participantId)
+      if (cancelled) return
+      const eliminated = (data ?? []).some(
+        (a) => a.is_correct === false || String(a.answer ?? '') === 'timeout',
+      )
+      setIsEliminated(eliminated)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [participantId, qIndex, sessionGameMode, sessionId, status, supabase])
 
   const sendReaction = useCallback(
     async (emoji: string) => {
@@ -349,37 +411,10 @@ export default function StudentPlayerPage() {
     questions.length,
   ])
 
-  useEffect(() => {
-    if (status === 'results' && !resultsBaselineLockedRef.current) {
-      resultsCompareBaselineRef.current = new Map(questionStartRanksRef.current)
-      resultsBaselineLockedRef.current = true
-    }
-    if (status === 'question') {
-      resultsBaselineLockedRef.current = false
-    }
-  }, [status])
-
-  /** Instantané des rangs au lancement de chaque question (pour flèches ↑↓ au classement). */
-  useEffect(() => {
-    if (status !== 'question' || !currentQuestion) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const { all } = await getSessionLeaderboard(sessionId)
-        if (cancelled) return
-        questionStartRanksRef.current = new Map(all.map((p, i) => [p.id, i + 1]))
-      } catch {
-        /* ignore */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [status, qIndex, currentQuestion?.id, sessionId])
-
   const submitAnswerNow = useCallback(
     async (fromTimeout: boolean, choiceOverride?: string | null) => {
       if (!currentQuestion || answered || status !== 'question') return
+      if (sessionGameMode === 'prof_dual' && isEliminated) return
 
       const choice = fromTimeout
         ? null
@@ -413,6 +448,7 @@ export default function StudentPlayerPage() {
           choice === null ? 'timeout' : String(choice),
           isCorrect,
           timeTaken,
+          { doubleOrNothing: !fromTimeout && Boolean(doubleOrNothing) },
         )
         if (res && 'duplicate' in res && res.duplicate) {
           setAnswerFeedback({ kind: 'duplicate' })
@@ -425,8 +461,12 @@ export default function StudentPlayerPage() {
               : 0
           setAnswerFeedback({ kind: 'submitted', pointsEarned: pe, correct: isCorrect })
         }
+        if (!fromTimeout && isCorrect && timeTaken <= 8) {
+          const all: LivePowerType[] = ['freeze', 'bomb', 'shield', 'swap']
+          const granted = all[Math.floor(Math.random() * all.length)]
+          setPowers((prev) => [...prev.slice(-2), granted])
+        }
         await refreshMe()
-        await refreshLeaderboard()
       } catch (e) {
         console.error(e)
         setAnswerFeedback(
@@ -445,8 +485,10 @@ export default function StudentPlayerPage() {
       sessionId,
       session?.question_started_at,
       timeLeft,
+      doubleOrNothing,
+      isEliminated,
       refreshMe,
-      refreshLeaderboard,
+      sessionGameMode,
     ],
   )
 
@@ -457,6 +499,7 @@ export default function StudentPlayerPage() {
       setSelectedAnswer(null)
       setAnswered(false)
       setAnswerFeedback(null)
+      setDoubleOrNothing(false)
       const dRaw = session?.question_deadline_at
       const serverOk =
         status === 'question' &&
@@ -516,18 +559,43 @@ export default function StudentPlayerPage() {
     void submitAnswerNow(true)
   }, [timeLeft, status, answered, currentQuestion, submitAnswerNow])
 
-  useEffect(() => {
-    if (status === 'results') {
-      void refreshLeaderboard()
-      void refreshMe()
-    }
-  }, [status, refreshLeaderboard, refreshMe])
+  const freezeSecondsLeft =
+    frozenUntil > Date.now() ? Math.ceil((frozenUntil - Date.now()) / 1000) : 0
 
-  useEffect(() => {
-    if (status !== 'results') return
-    const t = window.setInterval(() => void refreshLeaderboard(), 2500)
-    return () => window.clearInterval(t)
-  }, [status, refreshLeaderboard])
+  const applyPower = useCallback(
+    async (type: LivePowerType) => {
+      if (!session) return
+      if (powers.length === 0) return
+      const targetId = others[0]?.id ?? null
+      const result = await useLivePower({
+        sessionId,
+        participantId,
+        type,
+        targetParticipantId: type === 'freeze' ? targetId : null,
+      })
+      if (!result.ok) return
+
+      if (type === 'shield') setShieldActive(true)
+      setPowers((prev) => {
+        const idx = prev.indexOf(type)
+        if (idx < 0) return prev
+        const next = [...prev]
+        next.splice(idx, 1)
+        return next
+      })
+
+      const channel = supabase.channel(`student-live-${sessionId}-${participantId}`)
+      await channel.subscribe()
+      await channel.send({
+        type: 'broadcast',
+        event: 'power_used',
+        payload: { type, byParticipantId: participantId, targetParticipantId: targetId },
+      })
+      await supabase.removeChannel(channel)
+      void refreshMe()
+    },
+    [others, participantId, powers, refreshMe, session, sessionId, supabase],
+  )
 
   const liveRealtimeBadge = (
     <div
@@ -577,7 +645,7 @@ export default function StudentPlayerPage() {
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 p-6 text-center">
         <p className="text-lg font-semibold text-foreground">Session introuvable</p>
         <p className="max-w-sm text-sm text-muted-foreground">Vérifie le lien ou le code PIN avec ton enseignant.</p>
-        <Button asChild size="lg" variant="outline" className="min-h-12 min-w-[200px] touch-manipulation">
+        <Button asChild size="lg" variant="outline" className="min-h-12 w-full max-w-xs touch-manipulation">
           <Link href="/join">Rejoindre une autre session</Link>
         </Button>
       </div>
@@ -601,10 +669,10 @@ export default function StudentPlayerPage() {
             <span className="text-muted-foreground"> · nv. {me?.level ?? 1}</span>
           </p>
           <p className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-950 dark:text-amber-100">
-            Rang final <span className="tabular-nums font-black">#{myRank ?? '—'}</span> sur cette session
+            Session terminée · score final <span className="tabular-nums font-black">{me?.score ?? 0}</span>
           </p>
         </div>
-        <Button asChild size="lg" className="relative min-h-14 min-w-[min(100%,280px)] touch-manipulation text-base font-bold shadow-lg">
+        <Button asChild size="lg" className="relative min-h-14 w-full max-w-xs touch-manipulation text-base font-bold shadow-lg">
           <Link href="/join">Rejouer une autre partie</Link>
         </Button>
       </div>
@@ -689,10 +757,10 @@ export default function StudentPlayerPage() {
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Classement</p>
-              <p className="text-2xl font-black tracking-tight sm:text-3xl">Top 5</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Transition</p>
+              <p className="text-2xl font-black tracking-tight sm:text-3xl">Question suivante</p>
               <p className="mt-1 max-w-[240px] text-xs leading-snug text-muted-foreground sm:max-w-none">
-                Flèches : évolution de ton rang après la question.
+                Analyse en cours, reste prêt.
               </p>
             </div>
           </div>
@@ -701,86 +769,14 @@ export default function StudentPlayerPage() {
             {liveRealtimeBadge}
             <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-right sm:min-w-[9rem]">
               <p className="text-[10px] font-bold uppercase tracking-wide text-primary">Toi</p>
-              <p className="text-sm font-bold tabular-nums sm:text-base">
-                #{myRank ?? '—'} · Nv.{me?.level ?? 1}
-              </p>
+              <p className="text-sm font-bold tabular-nums sm:text-base">Nv.{me?.level ?? 1}</p>
               <p className="text-xs font-semibold tabular-nums text-muted-foreground">{me?.score ?? 0} pts</p>
             </div>
           </div>
         </header>
 
-        <ol className="mx-auto max-w-lg space-y-2.5 sm:max-w-2xl sm:space-y-3">
-          {leaderboard.map((row, i) => {
-            const medal =
-              row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : null
-            const isMe = row.id === participantId
-            const pid = row.id
-            const prevRank =
-              pid != null ? resultsCompareBaselineRef.current.get(pid) : undefined
-            const rankDelta =
-              prevRank !== undefined ? prevRank - row.rank : 0
-            const base =
-              row.rank === 1
-                ? 'border-amber-400/50 bg-amber-500/10'
-                : row.rank === 2
-                  ? 'border-slate-400/35 bg-slate-400/10'
-                  : row.rank === 3
-                    ? 'border-orange-400/40 bg-orange-500/10'
-                    : 'border-border bg-card'
-            return (
-              <li
-                key={row.id ?? `${row.rank}-${row.nickname}`}
-                className={`flex animate-in fade-in slide-in-from-left-2 flex-col gap-3 rounded-2xl border-2 px-4 py-3.5 duration-300 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between sm:rounded-3xl sm:px-5 sm:py-4 ${base} ${
-                  isMe ? 'ring-2 ring-primary ring-offset-2 ring-offset-background sm:scale-[1.02]' : ''
-                }`}
-                style={{ animationDelay: `${i * 70}ms` }}
-              >
-                <span className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center text-xl font-bold sm:h-12 sm:w-12 sm:text-2xl">
-                    {medal ?? <span className="text-sm font-black text-muted-foreground">#{row.rank}</span>}
-                  </span>
-                  <span className={`min-w-0 truncate text-base font-semibold sm:text-lg ${isMe ? 'text-primary' : ''}`}>
-                    {row.nickname}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center justify-end gap-2 min-[400px]:justify-start">
-                  {prevRank !== undefined && (
-                    <span
-                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
-                        rankDelta > 0
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-                          : rankDelta < 0
-                            ? 'bg-destructive/15 text-destructive'
-                            : 'bg-muted text-muted-foreground'
-                      }`}
-                      title={
-                        rankDelta > 0
-                          ? `Monte de ${rankDelta} place(s)`
-                          : rankDelta < 0
-                            ? `Descend de ${-rankDelta} place(s)`
-                            : 'Rang inchangé'
-                      }
-                    >
-                      {rankDelta > 0 ? (
-                        <ArrowUp className="h-4 w-4" aria-hidden />
-                      ) : rankDelta < 0 ? (
-                        <ArrowDown className="h-4 w-4" aria-hidden />
-                      ) : (
-                        <Minus className="h-4 w-4" aria-hidden />
-                      )}
-                    </span>
-                  )}
-                  <span className="text-right text-sm font-bold tabular-nums sm:text-base">
-                    {row.score} pts · Nv.{row.level}
-                  </span>
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-
         <div className="mx-auto mt-8 max-w-lg rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-center text-sm leading-relaxed text-muted-foreground sm:mt-10 sm:max-w-2xl sm:p-5">
-          La suite est lancée par l’animateur (ou automatiquement si activé).
+          La suite est lancée par l’animateur.
         </div>
 
         <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-0 right-0 flex flex-wrap justify-center gap-2 px-4">
@@ -867,10 +863,6 @@ export default function StudentPlayerPage() {
               {liveRealtimeBadge}
             </span>
             <span className="flex flex-wrap items-center gap-2 font-medium tabular-nums text-foreground">
-              <span>
-                Rang <strong className="text-primary">#{myRank ?? '—'}</strong>
-              </span>
-              <span className="text-muted-foreground">·</span>
               <span>Nv.{me?.level ?? 1}</span>
               <span className="text-muted-foreground">·</span>
               <span>{me?.score ?? 0} pts</span>
@@ -890,12 +882,91 @@ export default function StudentPlayerPage() {
               {currentQuestion.question_text}
             </h2>
 
-            {currentQuestion.question_type === 'mcq' && Array.isArray(currentQuestion.options) && (
+            {sessionGameMode === 'prof_dual' && isEliminated ? (
+              <div className="mt-6 rounded-2xl border border-border bg-muted/30 p-4 text-center">
+                <p className="text-sm font-semibold text-foreground">
+                  Tu es éliminé pour cette manche Battle Royale.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tu restes en mode spectateur et tu peux continuer à réagir.
+                </p>
+              </div>
+            ) : null}
+
+            {freezeSecondsLeft > 0 && (
+              <div className="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-900 dark:text-sky-100">
+                Timer gelé par un adversaire pendant {freezeSecondsLeft}s.
+              </div>
+            )}
+
+            {!isEliminated && (
+              <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-foreground">Double or Nothing</span>
+                  <input
+                    type="checkbox"
+                    checked={doubleOrNothing}
+                    onChange={(e) => setDoubleOrNothing(e.target.checked)}
+                    disabled={answered || timeLeft <= 0}
+                    className="h-4 w-4"
+                  />
+                </label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bonne réponse: points x2. Mauvaise réponse: score divisé par 2.
+                </p>
+              </div>
+            )}
+
+            {bossHp && (
+              <div className="mt-4 rounded-2xl border border-destructive/25 bg-destructive/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-destructive">Boss HP</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-destructive transition-all duration-500"
+                    style={{ width: `${Math.max(0, Math.min(100, (bossHp.hp / bossHp.maxHp) * 100))}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-xs font-semibold text-foreground">
+                  {bossHp.hp} / {bossHp.maxHp}
+                </p>
+              </div>
+            )}
+
+            {powers.length > 0 && !isEliminated && (
+              <div className="mt-4 rounded-2xl border border-border bg-muted/20 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Pouvoirs</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {powers.map((p, i) => (
+                    <button
+                      key={`${p}-${i}`}
+                      type="button"
+                      className="rounded-lg border border-border bg-background px-2 py-2 text-xs font-semibold"
+                      onClick={() => void applyPower(p)}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {p === 'freeze' && <Snowflake className="h-3.5 w-3.5" />}
+                        {p === 'bomb' && <Bomb className="h-3.5 w-3.5" />}
+                        {p === 'shield' && <Shield className="h-3.5 w-3.5" />}
+                        {p === 'swap' && <Shuffle className="h-3.5 w-3.5" />}
+                        {p}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {shieldActive && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Shield actif: le prochain sabotage est annulé.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {currentQuestion.question_type === 'mcq' && Array.isArray(currentQuestion.options) && !isEliminated && (
               <div className="mt-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4">
                 {currentQuestion.options.map((option: string, idx: number) => {
                   const nOpts = currentQuestion.options!.length
                   const isSel = selectedAnswer === String(idx)
-                  const canInteract = !answered && timeLeft > 0
+                  const canInteract = !answered && timeLeft > 0 && freezeSecondsLeft <= 0
                   const spanFull = nOpts % 2 === 1 && idx === nOpts - 1
                   return (
                     <button
@@ -921,11 +992,11 @@ export default function StudentPlayerPage() {
               </div>
             )}
 
-            {currentQuestion.question_type === 'true_false' && (
+            {currentQuestion.question_type === 'true_false' && !isEliminated && (
               <div className="mt-6 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 sm:gap-4">
                 {['Vrai', 'Faux'].map((label, idx) => {
                   const isSel = selectedAnswer === String(idx)
-                  const canInteract = !answered && timeLeft > 0
+                  const canInteract = !answered && timeLeft > 0 && freezeSecondsLeft <= 0
                   return (
                     <button
                       key={label}
